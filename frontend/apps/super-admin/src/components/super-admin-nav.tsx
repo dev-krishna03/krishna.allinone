@@ -12,6 +12,8 @@ export function SuperAdminNav() {
     { label: 'Product Catalog', href: '/super-admin/products' },
     { label: 'Plans & Commercial Editions', href: '/super-admin/plans' },
     { label: 'Price Books & Versions', href: '/super-admin/pricing' },
+    { label: 'SaaS Billing & MRR', href: '/super-admin/billing' },
+    { label: 'Payments & Webhooks', href: '/super-admin/payments' },
   ];
 
   return (

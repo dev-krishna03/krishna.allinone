@@ -47,6 +47,18 @@ import {
   AssignSeatDto,
   RecordUsageDto,
   EffectiveAppNavigation,
+  SaaSCustomer,
+  SaaSSubscription,
+  SaaSSubscriptionTerm,
+  SaaSCheckoutSession,
+  SaaSProviderEvent,
+  SaaSInvoice,
+  SaaSPayment,
+  ComputeQuoteDto,
+  QuoteResponse,
+  CreateCheckoutSessionDto,
+  ChangeSubscriptionDto,
+  UpdatePaymentMethodDto,
 } from '@business-os/types';
 
 export interface ApiClientConfig {
@@ -532,6 +544,66 @@ export class BusinessOSApiClient {
     return this.request(`/api/v1/organizations/${orgId}/usage/record`, {
       method: 'POST',
       body: JSON.stringify(dto),
+    });
+  }
+
+  // --- Phase 1.5: Billing, Subscriptions & Invoices ---
+  async getBillingQuote(orgId: string, dto: ComputeQuoteDto): Promise<QuoteResponse> {
+    return this.request<QuoteResponse>(`/api/v1/organizations/${orgId}/billing/quote`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async createCheckoutSession(orgId: string, dto: CreateCheckoutSessionDto): Promise<SaaSCheckoutSession> {
+    return this.request<SaaSCheckoutSession>(`/api/v1/organizations/${orgId}/billing/checkout`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async getSubscription(orgId: string): Promise<SaaSSubscription | null> {
+    return this.request<SaaSSubscription | null>(`/api/v1/organizations/${orgId}/billing/subscription`);
+  }
+
+  async changeSubscription(orgId: string, dto: ChangeSubscriptionDto): Promise<SaaSSubscription> {
+    return this.request<SaaSSubscription>(`/api/v1/organizations/${orgId}/billing/subscription/change`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async listInvoices(orgId: string): Promise<SaaSInvoice[]> {
+    return this.request<SaaSInvoice[]>(`/api/v1/organizations/${orgId}/billing/invoices`);
+  }
+
+  async updatePaymentMethod(orgId: string, dto: UpdatePaymentMethodDto): Promise<SaaSCustomer> {
+    return this.request<SaaSCustomer>(`/api/v1/organizations/${orgId}/billing/payment-method`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async getSuperAdminBillingMetrics(): Promise<any> {
+    return this.request('/api/v1/admin/billing/overview');
+  }
+
+  async listSuperAdminInvoices(): Promise<SaaSInvoice[]> {
+    return this.request<SaaSInvoice[]>('/api/v1/admin/billing/invoices');
+  }
+
+  async listSuperAdminPayments(): Promise<SaaSPayment[]> {
+    return this.request<SaaSPayment[]>('/api/v1/admin/billing/payments');
+  }
+
+  async listWebhookEvents(provider?: string): Promise<SaaSProviderEvent[]> {
+    const q = provider ? `?provider=${encodeURIComponent(provider)}` : '';
+    return this.request<SaaSProviderEvent[]>(`/api/v1/admin/billing/webhook-events${q}`);
+  }
+
+  async retryWebhookEvent(eventId: string): Promise<any> {
+    return this.request(`/api/v1/admin/billing/webhook-events/${eventId}/retry`, {
+      method: 'POST',
     });
   }
 }

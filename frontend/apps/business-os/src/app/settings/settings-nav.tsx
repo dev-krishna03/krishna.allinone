@@ -13,6 +13,7 @@ export function SettingsNav() {
     { label: 'Teams & Departments', href: '/settings/teams' },
     { label: 'Permission Matrix', href: '/settings/permissions' },
     { label: 'Policies & Simulator', href: '/settings/access-policies' },
+    { label: 'Billing & Invoices', href: '/settings/billing' },
     { label: 'Subscription', href: '/settings/subscription' },
     { label: 'Seat Licenses', href: '/settings/licenses' },
     { label: 'Security Audit', href: '/settings/security-audit' },

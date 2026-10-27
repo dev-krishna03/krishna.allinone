@@ -15,6 +15,7 @@ import { DeveloperModule } from './modules/developer/developer.module';
 import { SecurityModule } from './platform/security/security.module';
 import { RolesTeamsModule } from './modules/roles-teams/roles-teams.module';
 import { CatalogCommercialModule } from './modules/catalog-commercial/catalog-commercial.module';
+import { BillingModule } from './modules/billing/billing.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { CatalogCommercialModule } from './modules/catalog-commercial/catalog-co
     DeveloperModule,
     RolesTeamsModule,
     CatalogCommercialModule,
+    BillingModule,
   ],
 })
 export class AppModule {}

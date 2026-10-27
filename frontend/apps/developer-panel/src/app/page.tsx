@@ -8,6 +8,7 @@ export default function DeveloperConsolePage() {
   const [health, setHealth] = React.useState<any>(null);
   const [securityDiagnostics, setSecurityDiagnostics] = React.useState<any>(null);
   const [pricingCatalog, setPricingCatalog] = React.useState<any>(null);
+  const [webhookEvents, setWebhookEvents] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [replaying, setReplaying] = React.useState(false);
   const [replayResult, setReplayResult] = React.useState<any | null>(null);
@@ -16,12 +17,13 @@ export default function DeveloperConsolePage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [diagRes, clientsRes, healthRes, secRes, pricingRes] = await Promise.all([
+      const [diagRes, clientsRes, healthRes, secRes, pricingRes, whRes] = await Promise.all([
         fetch('http://localhost:3001/api/v1/developer/diagnostics'),
         fetch('http://localhost:3001/api/v1/developer/api-clients'),
         fetch('http://localhost:3001/api/v1/health'),
         fetch('http://localhost:3001/api/v1/developer/security-diagnostics'),
         fetch('http://localhost:3001/api/v1/public/pricing'),
+        fetch('http://localhost:3001/api/v1/admin/billing/webhook-events'),
       ]);
 
       if (!diagRes.ok || !clientsRes.ok || !healthRes.ok) {
@@ -42,6 +44,9 @@ export default function DeveloperConsolePage() {
       }
       if (pricingRes.ok) {
         setPricingCatalog(await pricingRes.json());
+      }
+      if (whRes.ok) {
+        setWebhookEvents(await whRes.json());
       }
     } catch (err: any) {
       setError(err.message || 'Error fetching developer diagnostics');
@@ -333,6 +338,80 @@ export default function DeveloperConsolePage() {
             </div>
           </div>
         )}
+
+        {/* Payment Provider Webhooks & Dead-Letter Telemetry */}
+        <div className="rounded-xl border border-[#E8E6DC] bg-white p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold text-[#141413]">Payment Provider Webhooks & Ingestion Telemetry</h2>
+              <p className="text-xs text-[#625F59]">
+                Raw webhook store, HMAC SHA-256 validation status, deduplication records, and dead-letter queue diagnostics.
+              </p>
+            </div>
+            <span className="text-xs bg-[#FAF9F5] px-2.5 py-1 rounded border border-[#E8E6DC] font-mono font-semibold text-[#141413]">
+              {webhookEvents.length} Captured Events
+            </span>
+          </div>
+
+          {webhookEvents.length === 0 ? (
+            <div className="p-8 text-center text-xs text-[#8A867D] bg-[#FAF9F5] rounded-lg border border-dashed border-[#E8E6DC]">
+              No webhook events captured yet. Incoming Stripe/Razorpay events will stream here automatically.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-[#E8E6DC] text-[#625F59]">
+                    <th className="pb-2 font-medium">Provider</th>
+                    <th className="pb-2 font-medium">Event Type</th>
+                    <th className="pb-2 font-medium">Event ID</th>
+                    <th className="pb-2 font-medium">Signature Status</th>
+                    <th className="pb-2 font-medium">Status</th>
+                    <th className="pb-2 font-medium">Processed At</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E8E6DC]">
+                  {webhookEvents.slice(0, 10).map((evt) => (
+                    <tr key={evt.id} className="hover:bg-[#FAF9F5]">
+                      <td className="py-2.5 font-bold uppercase tracking-wider text-[11px] text-[#141413]">
+                        {evt.provider}
+                      </td>
+                      <td className="py-2.5 font-mono font-medium text-[#141413]">{evt.eventType}</td>
+                      <td className="py-2.5 font-mono text-[11px] text-[#625F59]">{evt.eventId}</td>
+                      <td className="py-2.5">
+                        <span
+                          className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold ${
+                            evt.signatureVerified
+                              ? 'bg-[#476B3C]/10 text-[#476B3C]'
+                              : 'bg-[#B42318]/10 text-[#B42318]'
+                          }`}
+                        >
+                          {evt.signatureVerified ? 'VERIFIED' : 'FAILED'}
+                        </span>
+                      </td>
+                      <td className="py-2.5">
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold ${
+                            evt.status === 'PROCESSED'
+                              ? 'bg-[#476B3C]/10 text-[#476B3C]'
+                              : evt.status === 'FAILED'
+                              ? 'bg-[#B42318]/10 text-[#B42318]'
+                              : 'bg-[#C15F3C]/10 text-[#C15F3C]'
+                          }`}
+                        >
+                          {evt.status}
+                        </span>
+                      </td>
+                      <td className="py-2.5 text-[#8A867D] text-[11px]">
+                        {evt.processedAt ? new Date(evt.processedAt).toLocaleTimeString() : 'Pending'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
         {/* API Clients */}
         <div className="rounded-xl border border-[#E8E6DC] bg-white p-6 shadow-xs space-y-4">
