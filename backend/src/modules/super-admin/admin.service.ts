@@ -16,7 +16,7 @@ export class SuperAdminService {
       activePlans,
     ] = await Promise.all([
       this.prisma.organization.count(),
-      this.prisma.user.count({ where: { status: 'ACTIVE' } }),
+      this.prisma.identityUser.count({ where: { status: 'ACTIVE' } }),
       this.prisma.marketingEnquiry.count(),
       this.prisma.platformEventOutbox.count({ where: { status: 'PENDING' } }),
       this.prisma.platformEventOutbox.count({ where: { status: 'PROCESSED' } }),
@@ -71,7 +71,7 @@ export class SuperAdminService {
         planTier: true,
         createdAt: true,
         _count: {
-          select: { users: true, apiClients: true },
+          select: { members: true, apiClients: true },
         },
       },
     });

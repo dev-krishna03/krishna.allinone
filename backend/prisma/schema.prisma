@@ -21,6 +21,20 @@ enum OrgStatus {
   SUSPENDED
 }
 
+enum MemberStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
 enum PlanTier {
   STARTER
   GROWTH
@@ -79,45 +93,191 @@ enum ApiClientStatus {
   REVOKED
 }
 
-// 1. organizations (Canonical bootstrap identifiers)
+// 1. identity_users (Canonical user identity without Supabase Auth)
+model IdentityUser {
+  id              String         @id @default(uuid()) @db.Uuid
+  email           String         @unique @db.VarChar(255)
+  fullName        String         @map("full_name") @db.VarChar(255)
+  status          String         @default("ACTIVE") @db.VarChar(50)
+  isEmailVerified Boolean        @default(false) @map("is_email_verified")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  credentials           IdentityCredentials?
+  sessions              IdentitySession[]
+  memberships           OrganizationMember[]
+  sentInvitations       OrganizationInvitation[] @relation("InvitedByRelation")
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens   PasswordResetToken[]
+  securityEvents        IdentitySecurityEvent[]
+  auditLogs             AuditLog[]
+
+  @@index([email])
+  @@map("identity_users")
+}
+
+// 2. identity_credentials (Strong password hash)
+model IdentityCredentials {
+  id           String       @id @default(uuid()) @db.Uuid
+  userId       String       @unique @map("user_id") @db.Uuid
+  passwordHash String       @map("password_hash") @db.VarChar(255)
+  algorithm    String       @default("bcrypt") @db.VarChar(50)
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user         IdentityUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("identity_credentials")
+}
+
+// 3. identity_sessions (Active user sessions & device metadata)
+model IdentitySession {
+  id               String                 @id @default(uuid()) @db.Uuid
+  userId           String                 @map("user_id") @db.Uuid
+  userAgent        String?                @map("user_agent") @db.Text
+  ipAddress        String?                @map("ip_address") @db.VarChar(45)
+  expiresAt        DateTime               @map("expires_at") @db.Timestamptz(6)
+  revokedAt        DateTime?              @map("revoked_at") @db.Timestamptz(6)
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user             IdentityUser           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokens    IdentityRefreshToken[]
+
+  @@index([userId, revokedAt])
+  @@map("identity_sessions")
+}
+
+// 4. identity_refresh_tokens (Rotating refresh tokens with family reuse detection)
+model IdentityRefreshToken {
+  id        String          @id @default(uuid()) @db.Uuid
+  sessionId String          @map("session_id") @db.Uuid
+  tokenHash String          @map("token_hash") @db.VarChar(255)
+  familyId  String          @map("family_id") @db.Uuid
+  isUsed    Boolean         @default(false) @map("is_used")
+  expiresAt DateTime        @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  session   IdentitySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([familyId])
+  @@map("identity_refresh_tokens")
+}
+
+// 5. organizations (Canonical tenant entity)
 model Organization {
   id        String    @id @default(uuid()) @db.Uuid
   name      String    @db.VarChar(255)
   slug      String    @unique @db.VarChar(100)
+  legalName String?   @map("legal_name") @db.VarChar(255)
+  timezone  String    @default("UTC") @db.VarChar(50)
+  locale    String    @default("en-US") @db.VarChar(20)
+  country   String    @default("US") @db.VarChar(2)
+  currency  String    @default("USD") @db.VarChar(3)
+  seatLimit Int       @default(25) @map("seat_limit")
   status    OrgStatus @default(ACTIVE)
   planTier  PlanTier  @default(STARTER)
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  users           User[]
+  members         OrganizationMember[]
+  invitations     OrganizationInvitation[]
   auditLogs       AuditLog[]
   apiClients      ApiClient[]
   supportRequests SupportRequest[]
 
+  @@index([slug])
   @@map("organizations")
 }
 
-// 2. users (Canonical tenant user membership & identity)
-model User {
-  id             String    @id @default(uuid()) @db.Uuid
-  organizationId String    @map("organization_id") @db.Uuid
-  email          String    @db.VarChar(255)
-  fullName       String    @map("full_name") @db.VarChar(255)
-  role           UserRole  @default(EMPLOYEE)
-  status         String    @default("ACTIVE") @db.VarChar(50)
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+// 6. organization_members (Tenant membership & role)
+model OrganizationMember {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  role           UserRole     @default(EMPLOYEE)
+  status         MemberStatus @default(ACTIVE)
+  joinedAt       DateTime     @default(now()) @map("joined_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  auditLogs      AuditLog[]
+  user           IdentityUser @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([organizationId, email])
-  @@index([organizationId])
-  @@index([email])
-  @@map("users")
+  @@unique([organizationId, userId])
+  @@index([organizationId, status])
+  @@index([userId])
+  @@map("organization_members")
 }
 
-// 3. marketing_enquiries (Lead / demo requests - disjoint from CRM account)
+// 7. organization_invitations (Cryptographic invitations with TTL)
+model OrganizationInvitation {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  email          String       @db.VarChar(255)
+  role           UserRole     @default(EMPLOYEE)
+  token          String       @unique @db.VarChar(255)
+  status         InviteStatus @default(PENDING)
+  expiresAt      DateTime     @map("expires_at") @db.Timestamptz(6)
+  invitedById    String       @map("invited_by_id") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy      IdentityUser @relation("InvitedByRelation", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, email])
+  @@index([token])
+  @@map("organization_invitations")
+}
+
+// 8. email_verification_tokens (Single-use email verification tokens)
+model EmailVerificationToken {
+  id        String       @id @default(uuid()) @db.Uuid
+  userId    String       @map("user_id") @db.Uuid
+  token     String       @unique @db.VarChar(255)
+  expiresAt DateTime     @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime?    @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user      IdentityUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@map("email_verification_tokens")
+}
+
+// 9. password_reset_tokens (Single-use password reset tokens)
+model PasswordResetToken {
+  id        String       @id @default(uuid()) @db.Uuid
+  userId    String       @map("user_id") @db.Uuid
+  token     String       @unique @db.VarChar(255)
+  expiresAt DateTime     @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime?    @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user      IdentityUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@map("password_reset_tokens")
+}
+
+// 10. identity_security_events (Security event audit stream)
+model IdentitySecurityEvent {
+  id             String        @id @default(uuid()) @db.Uuid
+  userId         String?       @map("user_id") @db.Uuid
+  organizationId String?       @map("organization_id") @db.Uuid
+  eventType      String        @map("event_type") @db.VarChar(100)
+  metadata       Json?         @db.JsonB
+  ipAddress      String?       @map("ip_address") @db.VarChar(45)
+  userAgent      String?       @map("user_agent") @db.Text
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user           IdentityUser? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([eventType])
+  @@map("identity_security_events")
+}
+
+// 11. marketing_enquiries (Lead / demo requests - disjoint from CRM account)
 model MarketingEnquiry {
   id              String        @id @default(uuid()) @db.Uuid
   name            String        @db.VarChar(255)
@@ -136,7 +296,7 @@ model MarketingEnquiry {
   @@map("marketing_enquiries")
 }
 
-// 4. platform_event_outbox (Transactional Outbox)
+// 12. platform_event_outbox (Transactional Outbox)
 model PlatformEventOutbox {
   id            String       @id @default(uuid()) @db.Uuid
   eventName     String       @map("event_name") @db.VarChar(150)
@@ -154,27 +314,27 @@ model PlatformEventOutbox {
   @@map("platform_event_outbox")
 }
 
-// 5. audit_log (Immutable security and operational event log)
+// 13. audit_log (Immutable security and operational event log)
 model AuditLog {
-  id             String    @id @default(uuid()) @db.Uuid
-  organizationId String?   @map("organization_id") @db.Uuid
-  actorId        String?   @map("actor_id") @db.Uuid
-  action         String    @db.VarChar(100)
-  entityType     String    @map("entity_type") @db.VarChar(100)
-  entityId       String?   @map("entity_id") @db.VarChar(100)
-  metadata       Json?     @db.JsonB
-  ipAddress      String?   @map("ip_address") @db.VarChar(45)
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String?       @map("organization_id") @db.Uuid
+  actorId        String?       @map("actor_id") @db.Uuid
+  action         String        @db.VarChar(100)
+  entityType     String        @map("entity_type") @db.VarChar(100)
+  entityId       String?       @map("entity_id") @db.VarChar(100)
+  metadata       Json?         @db.JsonB
+  ipAddress      String?       @map("ip_address") @db.VarChar(45)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
 
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  actor          User?         @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actor          IdentityUser? @relation(fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, createdAt])
   @@index([action])
   @@map("audit_log")
 }
 
-// 6. product_catalog_placeholder (Dynamic product & pricing catalog)
+// 14. product_catalog_placeholder (Dynamic product & pricing catalog)
 model ProductCatalogPlaceholder {
   id              String          @id @default(uuid()) @db.Uuid
   code            String          @unique @db.VarChar(100)
@@ -195,7 +355,7 @@ model ProductCatalogPlaceholder {
   @@map("product_catalog_placeholder")
 }
 
-// 7. api_clients (Developer Console API tokens)
+// 15. api_clients (Developer Console API tokens)
 model ApiClient {
   id             String          @id @default(uuid()) @db.Uuid
   organizationId String          @map("organization_id") @db.Uuid
@@ -213,7 +373,7 @@ model ApiClient {
   @@map("api_clients")
 }
 
-// 8. support_requests (Support tracking)
+// 16. support_requests (Support tracking)
 model SupportRequest {
   id             String          @id @default(uuid()) @db.Uuid
   organizationId String          @map("organization_id") @db.Uuid

@@ -7,7 +7,7 @@ describe('SuperAdminService', () => {
   beforeEach(() => {
     mockPrisma = {
       organization: { count: jest.fn().mockResolvedValue(5), findMany: jest.fn().mockResolvedValue([]) },
-      user: { count: jest.fn().mockResolvedValue(42) },
+      identityUser: { count: jest.fn().mockResolvedValue(42) },
       marketingEnquiry: { count: jest.fn().mockResolvedValue(18) },
       platformEventOutbox: { count: jest.fn().mockResolvedValue(0) },
       auditLog: { count: jest.fn().mockResolvedValue(150), findMany: jest.fn().mockResolvedValue([]) },
