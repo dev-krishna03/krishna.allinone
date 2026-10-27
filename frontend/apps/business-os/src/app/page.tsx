@@ -130,6 +130,22 @@ export default function BusinessOSDashboard() {
               <span className="text-[10px] bg-white/20 px-1.5 rounded">Apps</span>
             </button>
 
+            <Link
+              href="/settings/members"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-md text-[#625F59] hover:bg-[#E8E6DC] hover:text-[#141413]"
+            >
+              <span>Team Members</span>
+              <span>👥</span>
+            </Link>
+
+            <Link
+              href="/settings/security"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-md text-[#625F59] hover:bg-[#E8E6DC] hover:text-[#141413]"
+            >
+              <span>Security & Sessions</span>
+              <span>🛡</span>
+            </Link>
+
             <a
               href="http://localhost:3000"
               className="w-full flex items-center justify-between px-3 py-2 rounded-md text-[#625F59] hover:bg-[#E8E6DC] hover:text-[#141413]"
@@ -175,8 +191,17 @@ export default function BusinessOSDashboard() {
               <div className="text-[11px] text-[#625F59] truncate">{user.email}</div>
             </div>
           </div>
-          <div className="mt-2 text-[10px] text-[#625F59]">
-            Role: <strong className="text-[#141413]">{user.role}</strong>
+          <div className="mt-2 flex items-center justify-between text-[10px] text-[#625F59]">
+            <span>Role: <strong className="text-[#141413]">{user.role}</strong></span>
+            <button
+              onClick={() => {
+                sessionStorage.clear();
+                window.location.href = '/login';
+              }}
+              className="text-[#B42318] hover:underline font-semibold"
+            >
+              Sign out
+            </button>
           </div>
         </div>
       </aside>
