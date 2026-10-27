@@ -444,3 +444,232 @@ export interface EffectiveAccessSummary {
   }[];
   fieldPolicies: OrgFieldPolicy[];
 }
+
+// ==========================================
+// PHASE 1.4: Dynamic Catalog, Plans, Entitlements & Licensing
+// ==========================================
+
+export type SaaSProductStatus = 'DRAFT' | 'ACTIVE' | 'DEPRECATED' | 'ARCHIVED';
+export type FeatureType = 'BOOLEAN' | 'LIMIT' | 'METERED';
+export type PlanEdition = 'COMMUNITY' | 'STARTER' | 'GROWTH' | 'ENTERPRISE';
+export type PlanPublishStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+export type EntitlementStatus = 'TRIAL' | 'ACTIVE' | 'PAST_DUE' | 'CANCELLED' | 'EXPIRED';
+export type SeatStatus = 'ACTIVE' | 'REVOKED';
+
+export interface SaaSProductFeature {
+  id: string;
+  productId: string;
+  code: string;
+  name: string;
+  description?: string | null;
+  type: FeatureType;
+  defaultLimit?: number | null;
+  createdAt?: string;
+}
+
+export interface SaaSPlanVersion {
+  id: string;
+  planId: string;
+  version: number;
+  priceAmount: number;
+  currency: string;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  featureLimits?: Record<string, any> | null;
+  createdAt?: string;
+}
+
+export interface SaaSPlan {
+  id: string;
+  productId?: string | null;
+  name: string;
+  code: string;
+  edition: PlanEdition;
+  billingInterval: 'MONTHLY' | 'YEARLY';
+  isBundle: boolean;
+  status: PlanPublishStatus;
+  trialDays: number;
+  includedSeats: number;
+  createdAt: string;
+  updatedAt: string;
+  versions?: SaaSPlanVersion[];
+  currentVersion?: SaaSPlanVersion | null;
+  product?: SaaSProduct | null;
+}
+
+export interface SaaSBundleItem {
+  id: string;
+  bundleId: string;
+  productId: string;
+  product?: SaaSProduct;
+}
+
+export interface SaaSBundle {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  status: SaaSProductStatus;
+  createdAt: string;
+  updatedAt: string;
+  bundleItems?: SaaSBundleItem[];
+}
+
+export interface SaaSProduct {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  icon?: string | null;
+  status: SaaSProductStatus;
+  category: 'CORE' | 'FINANCE' | 'OPERATIONS' | 'GROWTH';
+  dependencies: string[];
+  createdAt: string;
+  updatedAt: string;
+  features?: SaaSProductFeature[];
+  plans?: SaaSPlan[];
+}
+
+export interface OrgEntitlement {
+  id: string;
+  organizationId: string;
+  productId?: string | null;
+  bundleId?: string | null;
+  planId: string;
+  planVersionId: string;
+  status: EntitlementStatus;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  assignedSeatsLimit: number;
+  featureOverrides?: Record<string, any> | null;
+  createdAt: string;
+  updatedAt: string;
+  product?: SaaSProduct | null;
+  bundle?: SaaSBundle | null;
+  plan?: SaaSPlan | null;
+  planVersion?: SaaSPlanVersion | null;
+  assignedSeatsCount?: number;
+}
+
+export interface OrgSeatAssignment {
+  id: string;
+  organizationId: string;
+  memberId: string;
+  productId?: string | null;
+  entitlementId: string;
+  status: SeatStatus;
+  assignedAt: string;
+  member?: OrganizationMember;
+  product?: SaaSProduct | null;
+}
+
+export interface UsageMeter {
+  id: string;
+  organizationId: string;
+  featureCode: string;
+  periodStart: string;
+  periodEnd: string;
+  currentUsage: number;
+  softLimit?: number | null;
+  hardLimit?: number | null;
+  updatedAt: string;
+}
+
+export interface UsageEvent {
+  id: string;
+  organizationId: string;
+  operationId: string;
+  featureCode: string;
+  quantity: number;
+  timestamp: string;
+  metadata?: any;
+}
+
+export interface PriceBook {
+  id: string;
+  code: string;
+  currency: string;
+  region: string;
+  isDefault: boolean;
+  createdAt: string;
+}
+
+export interface CreateProductDto {
+  slug: string;
+  name: string;
+  description: string;
+  icon?: string;
+  category?: 'CORE' | 'FINANCE' | 'OPERATIONS' | 'GROWTH';
+  dependencies?: string[];
+}
+
+export interface UpdateProductDto {
+  name?: string;
+  description?: string;
+  icon?: string;
+  category?: 'CORE' | 'FINANCE' | 'OPERATIONS' | 'GROWTH';
+  dependencies?: string[];
+}
+
+export interface CreateFeatureDto {
+  code: string;
+  name: string;
+  description?: string;
+  type: FeatureType;
+  defaultLimit?: number;
+}
+
+export interface CreatePlanDto {
+  productId?: string | null;
+  name: string;
+  code?: string;
+  edition: PlanEdition;
+  billingInterval: 'MONTHLY' | 'YEARLY';
+  isBundle?: boolean;
+  trialDays?: number;
+  includedSeats?: number;
+  priceAmount: number;
+  currency?: string;
+  featureLimits?: Record<string, any>;
+}
+
+export interface CreateBundleDto {
+  code?: string;
+  name: string;
+  description: string;
+  productIds: string[];
+}
+
+export interface SubscribeEntitlementDto {
+  planId: string;
+  planVersionId?: string;
+  seats?: number;
+  isTrial?: boolean;
+}
+
+export interface AssignSeatDto {
+  memberId: string;
+  entitlementId: string;
+  productId?: string;
+}
+
+export interface RecordUsageDto {
+  operationId: string;
+  featureCode: string;
+  quantity: number;
+  metadata?: any;
+}
+
+export interface EffectiveAppNavigation {
+  availableApps: {
+    slug: string;
+    name: string;
+    icon?: string | null;
+    category: string;
+    edition: PlanEdition;
+    isEntitled: boolean;
+    hasSeat: boolean;
+    requiresSeat: boolean;
+    launchUrl: string;
+  }[];
+}
