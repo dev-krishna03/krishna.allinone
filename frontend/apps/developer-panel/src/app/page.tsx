@@ -6,6 +6,7 @@ export default function DeveloperConsolePage() {
   const [diagnostics, setDiagnostics] = React.useState<any>(null);
   const [apiClients, setApiClients] = React.useState<any[]>([]);
   const [health, setHealth] = React.useState<any>(null);
+  const [securityDiagnostics, setSecurityDiagnostics] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
   const [replaying, setReplaying] = React.useState(false);
   const [replayResult, setReplayResult] = React.useState<any | null>(null);
@@ -14,10 +15,11 @@ export default function DeveloperConsolePage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [diagRes, clientsRes, healthRes] = await Promise.all([
+      const [diagRes, clientsRes, healthRes, secRes] = await Promise.all([
         fetch('http://localhost:3001/api/v1/developer/diagnostics'),
         fetch('http://localhost:3001/api/v1/developer/api-clients'),
         fetch('http://localhost:3001/api/v1/health'),
+        fetch('http://localhost:3001/api/v1/developer/security-diagnostics'),
       ]);
 
       if (!diagRes.ok || !clientsRes.ok || !healthRes.ok) {
@@ -33,6 +35,9 @@ export default function DeveloperConsolePage() {
       setDiagnostics(diagJson);
       setApiClients(clientsJson);
       setHealth(healthJson);
+      if (secRes.ok) {
+        setSecurityDiagnostics(await secRes.json());
+      }
     } catch (err: any) {
       setError(err.message || 'Error fetching developer diagnostics');
     } finally {
@@ -210,6 +215,85 @@ export default function DeveloperConsolePage() {
             </table>
           </div>
         </div>
+
+        {/* Platform Security & Policy Diagnostics (Phase 1.3) */}
+        {securityDiagnostics && (
+          <div className="rounded-xl border border-[#E8E6DC] bg-white p-6 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E8E6DC] pb-3">
+              <div>
+                <h2 className="text-base font-bold text-[#141413]">
+                  Platform Security & Policy Engine Diagnostics
+                </h2>
+                <p className="text-xs text-[#625F59]">
+                  Evaluates RBAC/ABAC engine state, permission catalog registry, and active cache version tracking.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs bg-[#476B3C]/10 text-[#476B3C] border border-[#476B3C]/20 px-2 py-0.5 rounded font-mono font-semibold">
+                  Mode: {securityDiagnostics.policyEngine?.mode}
+                </span>
+                <span className="text-xs bg-[#F4F3EE] border border-[#E8E6DC] px-2 py-0.5 rounded text-[#141413] font-mono">
+                  Hierarchy: {securityDiagnostics.policyEngine?.roleHierarchy}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="rounded-lg border border-[#E8E6DC] bg-[#FAF9F5] p-3 space-y-1">
+                <span className="text-xs font-semibold text-[#141413]">Permission Catalog Registry</span>
+                <div className="text-xl font-bold text-[#C15F3C] font-mono">
+                  {securityDiagnostics.permissionRegistry?.totalRegistered ?? 0} Defined Grants
+                </div>
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {Object.entries(securityDiagnostics.permissionRegistry?.moduleDistribution || {}).map(
+                    ([mod, cnt]) => (
+                      <span
+                        key={mod}
+                        className="text-[10px] bg-white px-1.5 py-0.5 rounded border border-[#E8E6DC] text-[#625F59]"
+                      >
+                        {mod}: {cnt as number}
+                      </span>
+                    ),
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-[#E8E6DC] bg-[#FAF9F5] p-3 space-y-1">
+                <span className="text-xs font-semibold text-[#141413]">Supported Authorization Scopes</span>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {securityDiagnostics.policyEngine?.recordScopes?.map((s: string) => (
+                    <span
+                      key={s}
+                      className="text-[11px] bg-white px-2 py-0.5 rounded border border-[#E8E6DC] font-mono text-[#141413]"
+                    >
+                      {s}
+                    </span>
+                  ))}
+                </div>
+                <div className="text-[11px] text-[#625F59] mt-2">
+                  Cache Invalidation Versions: {securityDiagnostics.policyEngine?.activePolicyVersionsTracked ?? 0}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-[#E8E6DC] bg-[#FAF9F5] p-3 space-y-1">
+                <span className="text-xs font-semibold text-[#141413]">Field-Level Security Rules</span>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {securityDiagnostics.policyEngine?.fieldSecurity?.map((fs: string) => (
+                    <span
+                      key={fs}
+                      className="text-[11px] bg-white px-2 py-0.5 rounded border border-[#E8E6DC] font-mono text-[#141413]"
+                    >
+                      {fs}
+                    </span>
+                  ))}
+                </div>
+                <div className="text-[11px] text-[#476B3C] font-semibold mt-2">
+                  Masking Patterns: Custom Regex & Suffix (#) Preservation
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* API Clients */}
         <div className="rounded-xl border border-[#E8E6DC] bg-white p-6 shadow-xs space-y-4">
