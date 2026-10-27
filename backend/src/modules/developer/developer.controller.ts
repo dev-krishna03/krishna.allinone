@@ -24,4 +24,10 @@ export class DeveloperController {
   async processOutbox() {
     return this.developerService.triggerOutboxReplay();
   }
+
+  @Get('security-diagnostics')
+  @ApiOperation({ summary: 'Security policy engine status and registry telemetry' })
+  async getSecurityDiagnostics() {
+    return this.developerService.getSecurityDiagnostics();
+  }
 }

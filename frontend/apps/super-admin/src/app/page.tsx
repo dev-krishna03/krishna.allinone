@@ -6,6 +6,7 @@ export default function SuperAdminPage() {
   const [metrics, setMetrics] = React.useState<any>(null);
   const [tenants, setTenants] = React.useState<any[]>([]);
   const [auditLogs, setAuditLogs] = React.useState<any[]>([]);
+  const [securityTelemetry, setSecurityTelemetry] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -13,10 +14,11 @@ export default function SuperAdminPage() {
     async function loadAdminData() {
       try {
         setLoading(true);
-        const [overviewRes, tenantsRes, auditRes] = await Promise.all([
+        const [overviewRes, tenantsRes, auditRes, secRes] = await Promise.all([
           fetch('http://localhost:3001/api/v1/admin/overview'),
           fetch('http://localhost:3001/api/v1/admin/tenants'),
           fetch('http://localhost:3001/api/v1/admin/audit-logs?limit=15'),
+          fetch('http://localhost:3001/api/v1/admin/security-telemetry'),
         ]);
 
         if (!overviewRes.ok || !tenantsRes.ok || !auditRes.ok) {
@@ -32,6 +34,9 @@ export default function SuperAdminPage() {
         setMetrics(overviewJson);
         setTenants(tenantsJson);
         setAuditLogs(auditJson);
+        if (secRes.ok) {
+          setSecurityTelemetry(await secRes.json());
+        }
       } catch (err: any) {
         setError(err.message || 'Error loading Super Admin telemetry');
       } finally {
@@ -178,6 +183,80 @@ export default function SuperAdminPage() {
             </table>
           </div>
         </div>
+
+        {/* Authorization & Security Governance Telemetry (Phase 1.3) */}
+        {securityTelemetry && (
+          <div className="rounded-xl border border-[#E8E6DC] bg-white p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-[#141413]">
+                  Platform Authorization & Security Governance Telemetry
+                </h2>
+                <p className="text-xs text-[#625F59]">
+                  Privacy-safe operational metrics across RBAC roles, teams, field policies, and audit events.
+                </p>
+              </div>
+              <span className="text-xs bg-[#476B3C]/10 text-[#476B3C] border border-[#476B3C]/20 px-2.5 py-1 rounded font-semibold">
+                Policy Engine: {securityTelemetry.status}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 pt-2">
+              <div className="rounded-lg border border-[#E8E6DC] bg-[#FAF9F5] p-3 text-center">
+                <span className="text-[11px] text-[#625F59]">Custom Roles</span>
+                <div className="text-xl font-bold text-[#141413] mt-1">
+                  {securityTelemetry.aggregate?.customRolesCount ?? 0}
+                </div>
+              </div>
+              <div className="rounded-lg border border-[#E8E6DC] bg-[#FAF9F5] p-3 text-center">
+                <span className="text-[11px] text-[#625F59]">Built-in Roles</span>
+                <div className="text-xl font-bold text-[#141413] mt-1">
+                  {securityTelemetry.aggregate?.builtInRolesCount ?? 0}
+                </div>
+              </div>
+              <div className="rounded-lg border border-[#E8E6DC] bg-[#FAF9F5] p-3 text-center">
+                <span className="text-[11px] text-[#625F59]">Departments & Teams</span>
+                <div className="text-xl font-bold text-[#141413] mt-1">
+                  {securityTelemetry.aggregate?.teamsCount ?? 0}
+                </div>
+              </div>
+              <div className="rounded-lg border border-[#E8E6DC] bg-[#FAF9F5] p-3 text-center">
+                <span className="text-[11px] text-[#625F59]">Active Field Rules</span>
+                <div className="text-xl font-bold text-[#C15F3C] mt-1">
+                  {securityTelemetry.aggregate?.activeFieldPoliciesCount ?? 0}
+                </div>
+              </div>
+              <div className="rounded-lg border border-[#E8E6DC] bg-[#FAF9F5] p-3 text-center">
+                <span className="text-[11px] text-[#625F59]">Direct ABAC Shares</span>
+                <div className="text-xl font-bold text-[#141413] mt-1">
+                  {securityTelemetry.aggregate?.directRecordGrantsCount ?? 0}
+                </div>
+              </div>
+              <div className="rounded-lg border border-[#E8E6DC] bg-[#FAF9F5] p-3 text-center">
+                <span className="text-[11px] text-[#625F59]">Security Events</span>
+                <div className="text-xl font-bold text-[#476B3C] mt-1">
+                  {securityTelemetry.aggregate?.totalSecurityEvents ?? 0}
+                </div>
+              </div>
+            </div>
+
+            {securityTelemetry.recentEvents && securityTelemetry.recentEvents.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-[#E8E6DC]">
+                <h3 className="text-xs font-semibold text-[#141413] mb-2">Recent Security Policy Operations (Redacted)</h3>
+                <div className="flex flex-wrap gap-2">
+                  {securityTelemetry.recentEvents.slice(0, 5).map((e: any) => (
+                    <span
+                      key={e.id}
+                      className="text-[10px] font-mono bg-[#F4F3EE] px-2 py-1 rounded border border-[#E8E6DC] text-[#141413]"
+                    >
+                      {e.action} [{e.targetType}]
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Global Audit Ledger */}
         <div className="rounded-xl border border-[#E8E6DC] bg-white p-6 shadow-xs space-y-4">

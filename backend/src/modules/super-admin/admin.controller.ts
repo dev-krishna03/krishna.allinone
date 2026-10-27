@@ -25,4 +25,10 @@ export class SuperAdminController {
   async getTenants() {
     return this.adminService.getTenantsList();
   }
+
+  @Get('security-telemetry')
+  @ApiOperation({ summary: 'Super Admin privacy-safe aggregate authorization health' })
+  async getSecurityTelemetry() {
+    return this.adminService.getSecurityTelemetry();
+  }
 }

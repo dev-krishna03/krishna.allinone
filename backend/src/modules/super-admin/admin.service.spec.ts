@@ -12,6 +12,11 @@ describe('SuperAdminService', () => {
       platformEventOutbox: { count: jest.fn().mockResolvedValue(0) },
       auditLog: { count: jest.fn().mockResolvedValue(150), findMany: jest.fn().mockResolvedValue([]) },
       productCatalogPlaceholder: { count: jest.fn().mockResolvedValue(3) },
+      orgRole: { count: jest.fn().mockResolvedValue(4) },
+      orgTeam: { count: jest.fn().mockResolvedValue(2) },
+      recordAccessGrant: { count: jest.fn().mockResolvedValue(6) },
+      orgFieldPolicy: { count: jest.fn().mockResolvedValue(3) },
+      securityAuditEvent: { count: jest.fn().mockResolvedValue(24), findMany: jest.fn().mockResolvedValue([]) },
     };
 
     service = new SuperAdminService(mockPrisma);
@@ -25,5 +30,15 @@ describe('SuperAdminService', () => {
     expect(metrics.overview.totalEnquiries).toBe(18);
     expect(metrics.overview.activePublishedPlans).toBe(3);
     expect(metrics.systemHealth).toBe('OPERATIONAL');
+  });
+
+  it('should return privacy-safe aggregate security telemetry', async () => {
+    const telemetry = await service.getSecurityTelemetry();
+
+    expect(telemetry.aggregate.totalConfiguredRoles).toBe(8);
+    expect(telemetry.aggregate.teamsCount).toBe(2);
+    expect(telemetry.aggregate.activeFieldPoliciesCount).toBe(3);
+    expect(telemetry.aggregate.directRecordGrantsCount).toBe(6);
+    expect(telemetry.status).toBe('HEALTHY');
   });
 });

@@ -76,4 +76,48 @@ export class SuperAdminService {
       },
     });
   }
+
+  async getSecurityTelemetry() {
+    const [
+      customRolesCount,
+      builtInRolesCount,
+      teamsCount,
+      sharesCount,
+      fieldPoliciesCount,
+      securityEventsCount,
+      recentEvents,
+    ] = await Promise.all([
+      this.prisma.orgRole.count({ where: { isBuiltIn: false } }),
+      this.prisma.orgRole.count({ where: { isBuiltIn: true } }),
+      this.prisma.orgTeam.count(),
+      this.prisma.recordAccessGrant.count(),
+      this.prisma.orgFieldPolicy.count(),
+      this.prisma.securityAuditEvent.count(),
+      this.prisma.securityAuditEvent.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        select: {
+          id: true,
+          action: true,
+          targetType: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+    return {
+      aggregate: {
+        customRolesCount,
+        builtInRolesCount,
+        totalConfiguredRoles: customRolesCount + builtInRolesCount,
+        teamsCount,
+        activeFieldPoliciesCount: fieldPoliciesCount,
+        directRecordGrantsCount: sharesCount,
+        totalSecurityEvents: securityEventsCount,
+      },
+      recentEvents,
+      status: 'HEALTHY',
+      generatedAt: new Date().toISOString(),
+    };
+  }
 }
