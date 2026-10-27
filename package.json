@@ -1,13 +1,29 @@
 {
-  "name": "krishna.allinone",
+  "name": "business-os-monorepo",
+  "private": true,
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Unified Modular-Monolith Business OS",
+  "workspaces": [
+    "frontend/packages/*",
+    "frontend/apps/*",
+    "backend"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev:backend": "npm run start:dev --workspace=backend",
+    "dev:marketing": "npm run dev --workspace=@business-os/marketing",
+    "dev:app": "npm run dev --workspace=@business-os/app",
+    "dev:super-admin": "npm run dev --workspace=@business-os/super-admin",
+    "dev:developer": "npm run dev --workspace=@business-os/developer-panel",
+    "dev:portal": "npm run dev --workspace=@business-os/client-portal",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs"
+  "keywords": [
+    "business-os",
+    "modular-monolith",
+    "multitenant"
+  ],
+  "author": "dev-krishna03",
+  "license": "UNLICENSED"
 }

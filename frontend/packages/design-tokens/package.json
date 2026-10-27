@@ -1,0 +1,23 @@
+{
+  "name": "@business-os/design-tokens",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./tokens.css": "./tokens.css",
+    "./tailwind-preset": "./tailwind-preset.js"
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}
