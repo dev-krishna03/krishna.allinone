@@ -673,3 +673,288 @@ export interface EffectiveAppNavigation {
     launchUrl: string;
   }[];
 }
+
+// ==========================================
+// PHASE 1.5: SAAS BILLING, SUBSCRIPTIONS & INVOICES
+// ==========================================
+
+export enum SaaSSubscriptionStatus {
+  TRIALING = 'TRIALING',
+  PENDING = 'PENDING',
+  ACTIVE = 'ACTIVE',
+  PAST_DUE = 'PAST_DUE',
+  PAUSED = 'PAUSED',
+  CANCELLING = 'CANCELLING',
+  CANCELLED = 'CANCELLED',
+  EXPIRED = 'EXPIRED',
+}
+
+export enum CheckoutSessionStatus {
+  OPEN = 'OPEN',
+  COMPLETED = 'COMPLETED',
+  EXPIRED = 'EXPIRED',
+}
+
+export enum ProviderEventStatus {
+  RECEIVED = 'RECEIVED',
+  PROCESSED = 'PROCESSED',
+  FAILED = 'FAILED',
+  IGNORED = 'IGNORED',
+}
+
+export enum SaaSInvoiceStatus {
+  DRAFT = 'DRAFT',
+  OPEN = 'OPEN',
+  PAID = 'PAID',
+  VOID = 'VOID',
+  UNCOLLECTIBLE = 'UNCOLLECTIBLE',
+}
+
+export enum SaaSPaymentStatus {
+  PENDING = 'PENDING',
+  SUCCEEDED = 'SUCCEEDED',
+  FAILED = 'FAILED',
+}
+
+export enum SaaSRefundStatus {
+  PENDING = 'PENDING',
+  SUCCEEDED = 'SUCCEEDED',
+  FAILED = 'FAILED',
+}
+
+export enum DunningStatus {
+  IN_PROGRESS = 'IN_PROGRESS',
+  RECOVERED = 'RECOVERED',
+  FAILED = 'FAILED',
+}
+
+export interface SaaSCustomer {
+  id: string;
+  organizationId: string;
+  providerCustomerId?: string | null;
+  provider: string;
+  billingEmail: string;
+  billingName?: string | null;
+  taxId?: string | null;
+  address?: Record<string, any> | null;
+  paymentMethodLast4?: string | null;
+  paymentMethodBrand?: string | null;
+  paymentMethodExpiry?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SaaSSubscription {
+  id: string;
+  organizationId: string;
+  customerId: string;
+  planId: string;
+  planVersionId: string;
+  providerSubscriptionId?: string | null;
+  status: SaaSSubscriptionStatus;
+  seatQuantity: number;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  cancelAtPeriodEnd: boolean;
+  canceledAt?: string | null;
+  trialStart?: string | null;
+  trialEnd?: string | null;
+  metadata?: Record<string, any> | null;
+  createdAt: string;
+  updatedAt: string;
+  customer?: SaaSCustomer;
+  plan?: SaaSPlan;
+  planVersion?: SaaSPlanVersion;
+  terms?: SaaSSubscriptionTerm[];
+}
+
+export interface SaaSSubscriptionTerm {
+  id: string;
+  subscriptionId: string;
+  termNumber: number;
+  startDate: string;
+  endDate: string;
+  seatQuantity: number;
+  unitPrice: number;
+  totalAmount: number;
+  currency: string;
+  quoteSnapshot: Record<string, any>;
+  createdAt: string;
+}
+
+export interface SaaSSubscriptionEvent {
+  id: string;
+  subscriptionId: string;
+  previousStatus?: SaaSSubscriptionStatus | null;
+  newStatus: SaaSSubscriptionStatus;
+  reason: string;
+  actorId?: string | null;
+  metadata?: Record<string, any> | null;
+  createdAt: string;
+}
+
+export interface SaaSCheckoutSession {
+  id: string;
+  organizationId: string;
+  customerId?: string | null;
+  planId: string;
+  planVersionId: string;
+  idempotencyKey: string;
+  sessionToken: string;
+  providerSessionId?: string | null;
+  amountTotal: number;
+  currency: string;
+  seatQuantity: number;
+  status: CheckoutSessionStatus;
+  successUrl: string;
+  cancelUrl: string;
+  quoteSnapshot: Record<string, any>;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface SaaSProviderEvent {
+  id: string;
+  provider: string;
+  eventId: string;
+  eventType: string;
+  signatureVerified: boolean;
+  status: ProviderEventStatus;
+  payload: Record<string, any>;
+  errorMessage?: string | null;
+  processedAt?: string | null;
+  receivedAt: string;
+}
+
+export interface SaaSInvoice {
+  id: string;
+  organizationId: string;
+  subscriptionId?: string | null;
+  customerId: string;
+  invoiceNumber: string;
+  providerInvoiceId?: string | null;
+  status: SaaSInvoiceStatus;
+  billingReason: string;
+  subtotalAmount: number;
+  taxAmount: number;
+  totalAmount: number;
+  currency: string;
+  periodStart: string;
+  periodEnd: string;
+  dueDate: string;
+  paidAt?: string | null;
+  pdfUrl?: string | null;
+  hostedInvoiceUrl?: string | null;
+  lineItems: any[];
+  createdAt: string;
+  updatedAt: string;
+  payments?: SaaSPayment[];
+}
+
+export interface SaaSPayment {
+  id: string;
+  organizationId: string;
+  invoiceId?: string | null;
+  subscriptionId?: string | null;
+  providerPaymentId?: string | null;
+  amount: number;
+  currency: string;
+  status: SaaSPaymentStatus;
+  paymentMethodType: string;
+  failureReason?: string | null;
+  paidAt?: string | null;
+  createdAt: string;
+  refunds?: SaaSRefund[];
+}
+
+export interface SaaSRefund {
+  id: string;
+  paymentId: string;
+  providerRefundId?: string | null;
+  amount: number;
+  currency: string;
+  reason: string;
+  status: SaaSRefundStatus;
+  createdAt: string;
+}
+
+export interface SaaSCreditAdjustment {
+  id: string;
+  organizationId: string;
+  subscriptionId?: string | null;
+  amount: number;
+  currency: string;
+  reason: string;
+  appliedInvoiceId?: string | null;
+  createdAt: string;
+}
+
+export interface SaaSDunningRun {
+  id: string;
+  subscriptionId: string;
+  invoiceId: string;
+  attemptCount: number;
+  maxAttempts: number;
+  status: DunningStatus;
+  lastAttemptAt: string;
+  nextAttemptAt?: string | null;
+  gracePeriodEnd: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// DTOs
+export interface ComputeQuoteDto {
+  planId: string;
+  planVersionId?: string;
+  seatQuantity?: number;
+  currency?: string;
+}
+
+export interface QuoteResponse {
+  planId: string;
+  planVersionId: string;
+  planName: string;
+  edition: string;
+  interval: string;
+  seatQuantity: number;
+  unitPrice: number;
+  subtotal: number;
+  estimatedTax: number;
+  totalAmount: number;
+  currency: string;
+  proration?: {
+    isProrated: boolean;
+    creditAmount: number;
+    netPayable: number;
+    daysRemaining: number;
+  };
+  signature: string;
+  expiresAt: string;
+}
+
+export interface CreateCheckoutSessionDto {
+  planId: string;
+  planVersionId?: string;
+  seatQuantity?: number;
+  idempotencyKey?: string;
+  successUrl?: string;
+  cancelUrl?: string;
+}
+
+export interface ChangeSubscriptionDto {
+  targetPlanId?: string;
+  targetPlanVersionId?: string;
+  seatQuantity?: number;
+  cancelAtPeriodEnd?: boolean;
+  pause?: boolean;
+}
+
+export interface UpdatePaymentMethodDto {
+  paymentMethodToken: string;
+  brand?: string;
+  last4?: string;
+  expiryMonth?: string;
+  expiryYear?: string;
+}
+
