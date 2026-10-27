@@ -93,6 +93,37 @@ enum ApiClientStatus {
   REVOKED
 }
 
+enum PermissionSensitivity {
+  NORMAL
+  SENSITIVE
+  CRITICAL
+}
+
+enum RecordScope {
+  OWNER_ONLY
+  TEAM
+  DEPARTMENT
+  ALL
+}
+
+enum GranteeType {
+  USER
+  TEAM
+}
+
+enum AccessLevel {
+  READ
+  WRITE
+  ADMIN
+}
+
+enum FieldPolicyType {
+  READ_WRITE
+  READ_ONLY
+  HIDE
+  MASK
+}
+
 // 1. identity_users (Canonical user identity without Supabase Auth)
 model IdentityUser {
   id              String         @id @default(uuid()) @db.Uuid
@@ -180,11 +211,18 @@ model Organization {
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  members         OrganizationMember[]
-  invitations     OrganizationInvitation[]
-  auditLogs       AuditLog[]
-  apiClients      ApiClient[]
-  supportRequests SupportRequest[]
+  members             OrganizationMember[]
+  invitations         OrganizationInvitation[]
+  auditLogs           AuditLog[]
+  apiClients          ApiClient[]
+  supportRequests     SupportRequest[]
+  roles               OrgRole[]
+  memberRoles         OrgMemberRole[]
+  teams               OrgTeam[]
+  recordGrants        RecordAccessGrant[]
+  fieldPolicies       OrgFieldPolicy[]
+  policyVersion       AccessPolicyVersion?
+  securityAuditEvents SecurityAuditEvent[]
 
   @@index([slug])
   @@map("organizations")
@@ -200,8 +238,11 @@ model OrganizationMember {
   joinedAt       DateTime     @default(now()) @map("joined_at") @db.Timestamptz(6)
   updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user           IdentityUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization        Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user                IdentityUser        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleAssignments     OrgMemberRole[]
+  teamMemberships     OrgTeamMember[]
+  ledTeams            OrgTeam[]
 
   @@unique([organizationId, userId])
   @@index([organizationId, status])
@@ -388,4 +429,190 @@ model SupportRequest {
 
   @@index([organizationId])
   @@map("support_requests")
+}
+
+// 17. platform_permission_registry (System-wide granular permission definitions)
+model PlatformPermissionRegistry {
+  id          String                @id @default(uuid()) @db.Uuid
+  module      String                @db.VarChar(100)
+  resource    String                @db.VarChar(100)
+  action      String                @db.VarChar(100)
+  sensitivity PermissionSensitivity @default(NORMAL)
+  label       String                @db.VarChar(255)
+  description String?               @db.Text
+  createdAt   DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  rolePermissions OrgRolePermission[]
+
+  @@unique([module, resource, action])
+  @@index([module])
+  @@map("platform_permission_registry")
+}
+
+// 18. org_roles (Custom organization RBAC roles with optional inheritance)
+model OrgRole {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  name           String    @db.VarChar(255)
+  code           String    @db.VarChar(100)
+  isBuiltIn      Boolean   @default(false) @map("is_built_in")
+  parentRoleId   String?   @map("parent_role_id") @db.Uuid
+  description    String?   @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parentRole     OrgRole?            @relation("RoleHierarchy", fields: [parentRoleId], references: [id], onDelete: SetNull)
+  childRoles     OrgRole[]           @relation("RoleHierarchy")
+  permissions    OrgRolePermission[]
+  memberRoles    OrgMemberRole[]
+  fieldPolicies  OrgFieldPolicy[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("org_roles")
+}
+
+// 19. org_role_permissions (Role grants mapping to permissions and record scopes)
+model OrgRolePermission {
+  id           String      @id @default(uuid()) @db.Uuid
+  roleId       String      @map("role_id") @db.Uuid
+  permissionId String      @map("permission_id") @db.Uuid
+  recordScope  RecordScope @default(ALL) @map("record_scope")
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  role         OrgRole                    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   PlatformPermissionRegistry @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("org_role_permissions")
+}
+
+// 20. org_member_roles (Multi-role assignments for organization members)
+model OrgMemberRole {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  memberId       String   @map("member_id") @db.Uuid
+  roleId         String   @map("role_id") @db.Uuid
+  assignedAt     DateTime @default(now()) @map("assigned_at") @db.Timestamptz(6)
+
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  member         OrganizationMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  role           OrgRole            @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, roleId])
+  @@index([organizationId, memberId])
+  @@index([roleId])
+  @@map("org_member_roles")
+}
+
+// 21. org_teams (Teams & department organizational hierarchy)
+model OrgTeam {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  name           String    @db.VarChar(255)
+  code           String    @db.VarChar(100)
+  parentTeamId   String?   @map("parent_team_id") @db.Uuid
+  leadMemberId   String?   @map("lead_member_id") @db.Uuid
+  description    String?   @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parentTeam     OrgTeam?            @relation("TeamHierarchy", fields: [parentTeamId], references: [id], onDelete: SetNull)
+  childTeams     OrgTeam[]           @relation("TeamHierarchy")
+  leadMember     OrganizationMember? @relation(fields: [leadMemberId], references: [id], onDelete: SetNull)
+  members        OrgTeamMember[]
+
+  @@unique([organizationId, code])
+  @@index([organizationId])
+  @@map("org_teams")
+}
+
+// 22. org_team_members (Team membership mapping)
+model OrgTeamMember {
+  id        String   @id @default(uuid()) @db.Uuid
+  teamId    String   @map("team_id") @db.Uuid
+  memberId  String   @map("member_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  team      OrgTeam            @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  member    OrganizationMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, memberId])
+  @@index([teamId])
+  @@index([memberId])
+  @@map("org_team_members")
+}
+
+// 23. record_access_grants (Direct record sharing to specific users or teams)
+model RecordAccessGrant {
+  id             String      @id @default(uuid()) @db.Uuid
+  organizationId String      @map("organization_id") @db.Uuid
+  resourceType   String      @map("resource_type") @db.VarChar(100)
+  recordId       String      @map("record_id") @db.VarChar(100)
+  granteeType    GranteeType @map("grantee_type")
+  granteeId      String      @map("grantee_id") @db.Uuid
+  accessLevel    AccessLevel @default(READ) @map("access_level")
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, resourceType, recordId])
+  @@index([organizationId, granteeId])
+  @@map("record_access_grants")
+}
+
+// 24. org_field_policies (Field-level security: read-write, read-only, hide, mask)
+model OrgFieldPolicy {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @map("organization_id") @db.Uuid
+  roleId         String?         @map("role_id") @db.Uuid
+  resourceType   String          @map("resource_type") @db.VarChar(100)
+  fieldName      String          @map("field_name") @db.VarChar(100)
+  policy         FieldPolicyType @default(READ_WRITE)
+  maskPattern    String?         @default("REDACTED") @map("mask_pattern") @db.VarChar(100)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role           OrgRole?        @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, roleId, resourceType, fieldName])
+  @@index([organizationId, resourceType])
+  @@map("org_field_policies")
+}
+
+// 25. access_policy_versions (Version tracking for fast caching & invalidation)
+model AccessPolicyVersion {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @unique @map("organization_id") @db.Uuid
+  version        Int          @default(1)
+  updatedBy      String?      @map("updated_by") @db.Uuid
+  updatedAt      DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("access_policy_versions")
+}
+
+// 26. security_audit_events (Dedicated security policy and permission audit trail)
+model SecurityAuditEvent {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  actorId        String?      @map("actor_id") @db.Uuid
+  action         String       @db.VarChar(150)
+  targetType     String       @map("target_type") @db.VarChar(100)
+  targetId       String?      @map("target_id") @db.VarChar(100)
+  metadata       Json?        @db.JsonB
+  ipAddress      String?      @map("ip_address") @db.VarChar(45)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([action])
+  @@map("security_audit_events")
 }

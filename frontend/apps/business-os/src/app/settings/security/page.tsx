@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { SettingsNav } from '../settings-nav';
 
 interface SessionItem {
   id: string;
@@ -110,6 +111,8 @@ export default function SecuritySettingsPage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-10 space-y-8">
+        <SettingsNav />
+
         <div>
           <h2 className="text-2xl font-bold text-[#141413]">Security Credentials & Sessions</h2>
           <p className="text-xs text-[#625F59] mt-1">

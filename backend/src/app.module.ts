@@ -12,6 +12,8 @@ import { IdentityModule } from './modules/identity/identity.module';
 import { PlatformConfigEndpointsModule } from './modules/platform-config/platform-config.module';
 import { SuperAdminModule } from './modules/super-admin/admin.module';
 import { DeveloperModule } from './modules/developer/developer.module';
+import { SecurityModule } from './platform/security/security.module';
+import { RolesTeamsModule } from './modules/roles-teams/roles-teams.module';
 
 @Module({
   imports: [
@@ -22,6 +24,7 @@ import { DeveloperModule } from './modules/developer/developer.module';
     AuditModule,
     HealthModule,
     AuthModule,
+    SecurityModule,
 
     // Domain Modules
     OrganizationsModule,
@@ -31,6 +34,7 @@ import { DeveloperModule } from './modules/developer/developer.module';
     PlatformConfigEndpointsModule,
     SuperAdminModule,
     DeveloperModule,
+    RolesTeamsModule,
   ],
 })
 export class AppModule {}

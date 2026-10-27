@@ -15,6 +15,21 @@ import {
   OrganizationMember,
   OrganizationInvitation,
   IdentitySession,
+  PlatformPermission,
+  OrgRole,
+  OrgTeam,
+  RecordAccessGrant,
+  OrgFieldPolicy,
+  CreateRoleDto,
+  UpdateRoleDto,
+  CreateTeamDto,
+  UpdateTeamDto,
+  CreateRecordGrantDto,
+  UpsertFieldPolicyDto,
+  PolicySimulationRequest,
+  PolicySimulationResult,
+  EffectiveAccessSummary,
+  SecurityAuditEvent,
 } from '@business-os/types';
 
 export interface ApiClientConfig {
@@ -239,6 +254,157 @@ export class BusinessOSApiClient {
   // --- Current Context ---
   async getMe(): Promise<{ user: User; organization: Organization; permissions: string[] }> {
     return this.request<{ user: User; organization: Organization; permissions: string[] }>('/api/v1/me');
+  }
+
+  // --- Permissions Catalog ---
+  async getPermissionCatalog(): Promise<{ total: number; permissions: PlatformPermission[]; grouped: Record<string, PlatformPermission[]> }> {
+    return this.request('/api/v1/permissions/catalog');
+  }
+
+  // --- Policy Engine & Simulator ---
+  async getEffectiveAccess(orgId: string, memberId?: string): Promise<EffectiveAccessSummary> {
+    const q = memberId ? `?memberId=${encodeURIComponent(memberId)}` : '';
+    return this.request<EffectiveAccessSummary>(`/api/v1/organizations/${orgId}/policy/effective-access${q}`);
+  }
+
+  async simulatePolicy(orgId: string, dto: PolicySimulationRequest): Promise<PolicySimulationResult> {
+    return this.request<PolicySimulationResult>(`/api/v1/organizations/${orgId}/policy/simulate`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async getFieldPolicies(orgId: string, resourceType?: string): Promise<OrgFieldPolicy[]> {
+    const q = resourceType ? `?resourceType=${encodeURIComponent(resourceType)}` : '';
+    return this.request<OrgFieldPolicy[]>(`/api/v1/organizations/${orgId}/field-policies${q}`);
+  }
+
+  async upsertFieldPolicy(orgId: string, dto: UpsertFieldPolicyDto): Promise<OrgFieldPolicy> {
+    return this.request<OrgFieldPolicy>(`/api/v1/organizations/${orgId}/field-policies`, {
+      method: 'PUT',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async deleteFieldPolicy(orgId: string, policyId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/api/v1/organizations/${orgId}/field-policies/${policyId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getRecordShares(orgId: string, resourceType?: string, recordId?: string): Promise<RecordAccessGrant[]> {
+    const params = new URLSearchParams();
+    if (resourceType) params.set('resourceType', resourceType);
+    if (recordId) params.set('recordId', recordId);
+    const q = params.toString() ? `?${params.toString()}` : '';
+    return this.request<RecordAccessGrant[]>(`/api/v1/organizations/${orgId}/shares${q}`);
+  }
+
+  async createRecordShare(orgId: string, dto: CreateRecordGrantDto): Promise<RecordAccessGrant> {
+    return this.request<RecordAccessGrant>(`/api/v1/organizations/${orgId}/shares`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async deleteRecordShare(orgId: string, grantId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/api/v1/organizations/${orgId}/shares/${grantId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getSecurityAudit(orgId: string, limit = 50, offset = 0): Promise<{ events: SecurityAuditEvent[]; total: number; limit: number; offset: number }> {
+    return this.request(`/api/v1/organizations/${orgId}/security-audit?limit=${limit}&offset=${offset}`);
+  }
+
+  // --- Roles Management ---
+  async getRoles(orgId: string): Promise<OrgRole[]> {
+    return this.request<OrgRole[]>(`/api/v1/organizations/${orgId}/roles`);
+  }
+
+  async getRole(orgId: string, roleId: string): Promise<OrgRole> {
+    return this.request<OrgRole>(`/api/v1/organizations/${orgId}/roles/${roleId}`);
+  }
+
+  async createRole(orgId: string, dto: CreateRoleDto): Promise<OrgRole> {
+    return this.request<OrgRole>(`/api/v1/organizations/${orgId}/roles`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async updateRole(orgId: string, roleId: string, dto: UpdateRoleDto): Promise<OrgRole> {
+    return this.request<OrgRole>(`/api/v1/organizations/${orgId}/roles/${roleId}`, {
+      method: 'PUT',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async deleteRole(orgId: string, roleId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/api/v1/organizations/${orgId}/roles/${roleId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async seedDefaultRoles(orgId: string): Promise<{ success: boolean; message: string }> {
+    return this.request<{ success: boolean; message: string }>(`/api/v1/organizations/${orgId}/roles/seed-defaults`, {
+      method: 'POST',
+    });
+  }
+
+  async assignMemberRole(orgId: string, memberId: string, roleId: string): Promise<any> {
+    return this.request(`/api/v1/organizations/${orgId}/members/${memberId}/roles`, {
+      method: 'POST',
+      body: JSON.stringify({ roleId }),
+    });
+  }
+
+  async removeMemberRole(orgId: string, memberId: string, roleId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/api/v1/organizations/${orgId}/members/${memberId}/roles/${roleId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // --- Teams & Department Hierarchy ---
+  async getTeams(orgId: string): Promise<OrgTeam[]> {
+    return this.request<OrgTeam[]>(`/api/v1/organizations/${orgId}/teams`);
+  }
+
+  async getTeam(orgId: string, teamId: string): Promise<OrgTeam> {
+    return this.request<OrgTeam>(`/api/v1/organizations/${orgId}/teams/${teamId}`);
+  }
+
+  async createTeam(orgId: string, dto: CreateTeamDto): Promise<OrgTeam> {
+    return this.request<OrgTeam>(`/api/v1/organizations/${orgId}/teams`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async updateTeam(orgId: string, teamId: string, dto: UpdateTeamDto): Promise<OrgTeam> {
+    return this.request<OrgTeam>(`/api/v1/organizations/${orgId}/teams/${teamId}`, {
+      method: 'PUT',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async deleteTeam(orgId: string, teamId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/api/v1/organizations/${orgId}/teams/${teamId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async addTeamMember(orgId: string, teamId: string, memberId: string): Promise<any> {
+    return this.request(`/api/v1/organizations/${orgId}/teams/${teamId}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ memberId }),
+    });
+  }
+
+  async removeTeamMember(orgId: string, teamId: string, memberId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/api/v1/organizations/${orgId}/teams/${teamId}/members/${memberId}`, {
+      method: 'DELETE',
+    });
   }
 }
 
