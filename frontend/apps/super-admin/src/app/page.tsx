@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { SuperAdminNav } from '../components/super-admin-nav';
 
 export default function SuperAdminPage() {
   const [metrics, setMetrics] = React.useState<any>(null);
@@ -89,6 +90,8 @@ export default function SuperAdminPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+        <SuperAdminNav />
+
         {error && (
           <div className="rounded-lg border border-[#B42318]/30 bg-[#B42318]/5 p-4 text-xs text-[#B42318]">
             <strong>Telemetry Error:</strong> {error}

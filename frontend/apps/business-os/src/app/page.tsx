@@ -23,6 +23,7 @@ interface UserContext {
 
 export default function BusinessOSDashboard() {
   const [data, setData] = React.useState<UserContext | null>(null);
+  const [effectiveNav, setEffectiveNav] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [showCommandPalette, setShowCommandPalette] = React.useState(false);
@@ -38,6 +39,18 @@ export default function BusinessOSDashboard() {
         }
         const json = await res.json();
         setData(json);
+
+        if (json?.organization?.id) {
+          try {
+            const navRes = await fetch(`http://localhost:3001/api/v1/organizations/${json.organization.id}/entitlements/effective-nav`);
+            if (navRes.ok) {
+              const navData = await navRes.json();
+              setEffectiveNav(navData.availableApps || navData);
+            }
+          } catch (_) {
+            // graceful fallback
+          }
+        }
       } catch (err: any) {
         setError(err.message || 'Unable to connect to platform API');
       } finally {
@@ -129,6 +142,30 @@ export default function BusinessOSDashboard() {
               <span>Application Launcher</span>
               <span className="text-[10px] bg-white/20 px-1.5 rounded">Apps</span>
             </button>
+
+            <Link
+              href="/app/marketplace"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-md text-[#625F59] hover:bg-[#E8E6DC] hover:text-[#141413]"
+            >
+              <span>App Marketplace</span>
+              <span className="text-[10px] bg-[#C15F3C]/10 text-[#C15F3C] font-bold px-1.5 rounded">14 Apps</span>
+            </Link>
+
+            <Link
+              href="/settings/subscription"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-md text-[#625F59] hover:bg-[#E8E6DC] hover:text-[#141413]"
+            >
+              <span>Subscription & Plans</span>
+              <span>💳</span>
+            </Link>
+
+            <Link
+              href="/settings/licenses"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-md text-[#625F59] hover:bg-[#E8E6DC] hover:text-[#141413]"
+            >
+              <span>Seat Licenses</span>
+              <span>🪑</span>
+            </Link>
 
             <Link
               href="/settings/members"
@@ -300,53 +337,118 @@ export default function BusinessOSDashboard() {
 
           {activeTab === 'launcher' && (
             <div className="space-y-6 max-w-6xl">
-              <div>
-                <h2 className="text-xl font-bold text-[#141413]">Application Launcher</h2>
-                <p className="text-xs text-[#625F59] mt-1">
-                  Launch entitled business applications inside your tenant boundary.
-                </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-[#141413]">Application Launcher</h2>
+                  <p className="text-xs text-[#625F59] mt-1">
+                    Launch entitled business applications inside your tenant boundary.
+                  </p>
+                </div>
+                <Link
+                  href="/app/marketplace"
+                  className="rounded-lg bg-[#C15F3C] px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-[#A84E31] transition"
+                >
+                  Browse App Marketplace (14 Modules) →
+                </Link>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="rounded-xl border border-[#E8E6DC] bg-white p-6 shadow-xs hover:border-[#C15F3C] transition-colors">
-                  <span className="text-xs font-semibold text-[#C15F3C]">Operations</span>
-                  <h3 className="text-base font-bold text-[#141413] mt-1">Core Financial Ledger</h3>
-                  <p className="text-xs text-[#625F59] mt-2 mb-4">
-                    Decimal-accurate multi-currency ledger, invoice generation, and bank reconciliations.
-                  </p>
-                  <span className="text-[11px] font-semibold text-[#476B3C] bg-[#476B3C]/10 px-2 py-0.5 rounded">
-                    Entitled
-                  </span>
-                </div>
+              {effectiveNav.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  {effectiveNav.map((app) => {
+                    const canAccess = app.isEntitled && (!app.requiresSeat || app.hasSeat);
+                    return (
+                      <div
+                        key={app.slug}
+                        className="rounded-xl border border-[#E8E6DC] bg-white p-5 shadow-xs hover:border-[#C15F3C] transition-colors flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[10px] uppercase font-bold tracking-wider text-[#C15F3C]">
+                              {app.category}
+                            </span>
+                            {app.isCore ? (
+                              <span className="text-[10px] font-semibold bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                                Core
+                              </span>
+                            ) : app.isEntitled ? (
+                              <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">
+                                Licensed
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-semibold bg-amber-100 text-amber-800 px-2 py-0.5 rounded">
+                                Add-on
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="text-base font-bold text-[#141413]">{app.name}</h3>
+                          <p className="text-xs text-[#625F59] mt-1 line-clamp-2">
+                            {app.name} independent Business OS module with full multitenant data isolation.
+                          </p>
+                        </div>
 
-                <div className="rounded-xl border border-[#E8E6DC] bg-white p-6 shadow-xs hover:border-[#C15F3C] transition-colors">
-                  <span className="text-xs font-semibold text-[#2F5C83]">Client Engagement</span>
-                  <h3 className="text-base font-bold text-[#141413] mt-1">External Client Portal</h3>
-                  <p className="text-xs text-[#625F59] mt-2 mb-4">
-                    Secure document sharing and project status views for your external clients.
-                  </p>
-                  <a
-                    href="http://localhost:3005"
-                    className="inline-block text-xs font-semibold text-[#C15F3C] hover:underline"
-                  >
-                    Open Client Portal →
-                  </a>
+                        <div className="mt-4 pt-3 border-t border-[#E8E6DC]">
+                          {canAccess ? (
+                            <Link
+                              href={app.launchUrl}
+                              className="w-full block text-center py-2 rounded-md text-xs font-semibold bg-[#FAF9F5] border border-[#E8E6DC] text-[#141413] hover:bg-[#F4F3EE] transition"
+                            >
+                              Open Application →
+                            </Link>
+                          ) : (
+                            <Link
+                              href="/app/marketplace"
+                              className="w-full block text-center py-2 rounded-md text-xs font-semibold bg-[#C15F3C] text-white hover:bg-[#A84E31] transition"
+                            >
+                              Start Free Trial / Subscribe
+                            </Link>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="rounded-xl border border-[#E8E6DC] bg-white p-6 shadow-xs hover:border-[#C15F3C] transition-colors">
+                    <span className="text-xs font-semibold text-[#C15F3C]">Operations</span>
+                    <h3 className="text-base font-bold text-[#141413] mt-1">Core Financial Ledger</h3>
+                    <p className="text-xs text-[#625F59] mt-2 mb-4">
+                      Decimal-accurate multi-currency ledger, invoice generation, and bank reconciliations.
+                    </p>
+                    <span className="text-[11px] font-semibold text-[#476B3C] bg-[#476B3C]/10 px-2 py-0.5 rounded">
+                      Entitled
+                    </span>
+                  </div>
 
-                <div className="rounded-xl border border-[#E8E6DC] bg-white p-6 shadow-xs hover:border-[#C15F3C] transition-colors">
-                  <span className="text-xs font-semibold text-[#996000]">Developer</span>
-                  <h3 className="text-base font-bold text-[#141413] mt-1">Developer Console</h3>
-                  <p className="text-xs text-[#625F59] mt-2 mb-4">
-                    Manage API keys, inspect transactional outbox replay, and monitor runtime diagnostics.
-                  </p>
-                  <a
-                    href="http://localhost:3004"
-                    className="inline-block text-xs font-semibold text-[#C15F3C] hover:underline"
-                  >
-                    Open Diagnostics Console →
-                  </a>
+                  <div className="rounded-xl border border-[#E8E6DC] bg-white p-6 shadow-xs hover:border-[#C15F3C] transition-colors">
+                    <span className="text-xs font-semibold text-[#2F5C83]">Client Engagement</span>
+                    <h3 className="text-base font-bold text-[#141413] mt-1">External Client Portal</h3>
+                    <p className="text-xs text-[#625F59] mt-2 mb-4">
+                      Secure document sharing and project status views for your external clients.
+                    </p>
+                    <a
+                      href="http://localhost:3005"
+                      className="inline-block text-xs font-semibold text-[#C15F3C] hover:underline"
+                    >
+                      Open Client Portal →
+                    </a>
+                  </div>
+
+                  <div className="rounded-xl border border-[#E8E6DC] bg-white p-6 shadow-xs hover:border-[#C15F3C] transition-colors">
+                    <span className="text-xs font-semibold text-[#996000]">Developer</span>
+                    <h3 className="text-base font-bold text-[#141413] mt-1">Developer Console</h3>
+                    <p className="text-xs text-[#625F59] mt-2 mb-4">
+                      Manage API keys, inspect transactional outbox replay, and monitor runtime diagnostics.
+                    </p>
+                    <a
+                      href="http://localhost:3004"
+                      className="inline-block text-xs font-semibold text-[#C15F3C] hover:underline"
+                    >
+                      Open Diagnostics Console →
+                    </a>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </main>

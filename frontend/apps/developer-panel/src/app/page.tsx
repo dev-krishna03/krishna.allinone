@@ -7,6 +7,7 @@ export default function DeveloperConsolePage() {
   const [apiClients, setApiClients] = React.useState<any[]>([]);
   const [health, setHealth] = React.useState<any>(null);
   const [securityDiagnostics, setSecurityDiagnostics] = React.useState<any>(null);
+  const [pricingCatalog, setPricingCatalog] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
   const [replaying, setReplaying] = React.useState(false);
   const [replayResult, setReplayResult] = React.useState<any | null>(null);
@@ -15,11 +16,12 @@ export default function DeveloperConsolePage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [diagRes, clientsRes, healthRes, secRes] = await Promise.all([
+      const [diagRes, clientsRes, healthRes, secRes, pricingRes] = await Promise.all([
         fetch('http://localhost:3001/api/v1/developer/diagnostics'),
         fetch('http://localhost:3001/api/v1/developer/api-clients'),
         fetch('http://localhost:3001/api/v1/health'),
         fetch('http://localhost:3001/api/v1/developer/security-diagnostics'),
+        fetch('http://localhost:3001/api/v1/public/pricing'),
       ]);
 
       if (!diagRes.ok || !clientsRes.ok || !healthRes.ok) {
@@ -37,6 +39,9 @@ export default function DeveloperConsolePage() {
       setHealth(healthJson);
       if (secRes.ok) {
         setSecurityDiagnostics(await secRes.json());
+      }
+      if (pricingRes.ok) {
+        setPricingCatalog(await pricingRes.json());
       }
     } catch (err: any) {
       setError(err.message || 'Error fetching developer diagnostics');
@@ -291,6 +296,40 @@ export default function DeveloperConsolePage() {
                   Masking Patterns: Custom Regex & Suffix (#) Preservation
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Commercial Catalog & Entitlements Telemetry */}
+        {pricingCatalog && (
+          <div className="rounded-xl border border-[#E8E6DC] bg-white p-6 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-[#141413]">Commercial Catalog & Pricing Registry</h2>
+                <p className="text-xs text-[#625F59]">Active published SaaS plans, grandfathered rate versions, and regional pricing tiers.</p>
+              </div>
+              <span className="text-xs bg-[#FAF9F5] px-2.5 py-1 rounded border border-[#E8E6DC] font-semibold text-[#141413]">
+                {pricingCatalog.plans?.length || 0} Published Plans
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {(pricingCatalog.plans || []).map((p: any) => (
+                <div key={p.id} className="p-3.5 rounded-lg border border-[#E8E6DC] bg-[#FAF9F5] text-xs space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-[#141413]">{p.name}</span>
+                    <span className="text-[10px] font-mono bg-white border border-[#E8E6DC] px-1.5 py-0.5 rounded text-[#C15F3C]">
+                      {p.edition}
+                    </span>
+                  </div>
+                  <div className="text-[#625F59]">
+                    Rate: <span className="font-semibold text-[#141413]">${p.currentVersion?.price ?? 0}</span> / {p.interval}
+                  </div>
+                  <div className="text-[11px] text-[#8A867D]">
+                    {p.includedSeats} included seats • {p.trialDays}d trial
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}

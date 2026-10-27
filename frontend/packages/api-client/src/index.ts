@@ -30,6 +30,23 @@ import {
   PolicySimulationResult,
   EffectiveAccessSummary,
   SecurityAuditEvent,
+  SaaSProduct,
+  SaaSProductFeature,
+  SaaSPlan,
+  SaaSPlanVersion,
+  SaaSBundle,
+  OrgEntitlement,
+  OrgSeatAssignment,
+  UsageMeter,
+  CreateProductDto,
+  UpdateProductDto,
+  CreateFeatureDto,
+  CreatePlanDto,
+  CreateBundleDto,
+  SubscribeEntitlementDto,
+  AssignSeatDto,
+  RecordUsageDto,
+  EffectiveAppNavigation,
 } from '@business-os/types';
 
 export interface ApiClientConfig {
@@ -404,6 +421,117 @@ export class BusinessOSApiClient {
   async removeTeamMember(orgId: string, teamId: string, memberId: string): Promise<{ success: boolean }> {
     return this.request<{ success: boolean }>(`/api/v1/organizations/${orgId}/teams/${teamId}/members/${memberId}`, {
       method: 'DELETE',
+    });
+  }
+
+  // --- Phase 1.4: Catalog, Plans, Entitlements & Licensing ---
+  async getPublicPricing(): Promise<any[]> {
+    return this.request('/api/v1/public/pricing');
+  }
+
+  async getPlatformProducts(status?: string): Promise<SaaSProduct[]> {
+    const q = status ? `?status=${encodeURIComponent(status)}` : '';
+    return this.request<SaaSProduct[]>(`/api/v1/platform/products${q}`);
+  }
+
+  async getPlatformProduct(idOrSlug: string): Promise<SaaSProduct> {
+    return this.request<SaaSProduct>(`/api/v1/platform/products/${idOrSlug}`);
+  }
+
+  async createPlatformProduct(dto: CreateProductDto): Promise<SaaSProduct> {
+    return this.request<SaaSProduct>('/api/v1/platform/products', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async updatePlatformProduct(id: string, dto: UpdateProductDto): Promise<SaaSProduct> {
+    return this.request<SaaSProduct>(`/api/v1/platform/products/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async addProductFeature(productId: string, dto: CreateFeatureDto): Promise<SaaSProductFeature> {
+    return this.request<SaaSProductFeature>(`/api/v1/platform/products/${productId}/features`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async getPlatformPlans(productId?: string, edition?: string): Promise<SaaSPlan[]> {
+    const params = new URLSearchParams();
+    if (productId) params.set('productId', productId);
+    if (edition) params.set('edition', edition);
+    const q = params.toString() ? `?${params.toString()}` : '';
+    return this.request<SaaSPlan[]>(`/api/v1/platform/plans${q}`);
+  }
+
+  async createPlatformPlan(dto: CreatePlanDto): Promise<SaaSPlan> {
+    return this.request<SaaSPlan>('/api/v1/platform/plans', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async publishPlatformPlan(id: string): Promise<SaaSPlan> {
+    return this.request<SaaSPlan>(`/api/v1/platform/plans/${id}/publish`, {
+      method: 'POST',
+    });
+  }
+
+  async getPlatformBundles(): Promise<SaaSBundle[]> {
+    return this.request<SaaSBundle[]>('/api/v1/platform/bundles');
+  }
+
+  async createPlatformBundle(dto: CreateBundleDto): Promise<SaaSBundle> {
+    return this.request<SaaSBundle>('/api/v1/platform/bundles', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async getTenantEntitlements(orgId: string): Promise<OrgEntitlement[]> {
+    return this.request<OrgEntitlement[]>(`/api/v1/organizations/${orgId}/entitlements`);
+  }
+
+  async subscribeTenant(orgId: string, dto: SubscribeEntitlementDto): Promise<OrgEntitlement> {
+    return this.request<OrgEntitlement>(`/api/v1/organizations/${orgId}/entitlements/subscribe`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async getEffectiveAppNavigation(orgId: string): Promise<EffectiveAppNavigation> {
+    return this.request<EffectiveAppNavigation>(`/api/v1/organizations/${orgId}/entitlements/effective-nav`);
+  }
+
+  async getSeatAssignments(orgId: string, entitlementId?: string): Promise<OrgSeatAssignment[]> {
+    const q = entitlementId ? `?entitlementId=${encodeURIComponent(entitlementId)}` : '';
+    return this.request<OrgSeatAssignment[]>(`/api/v1/organizations/${orgId}/seats${q}`);
+  }
+
+  async assignSeat(orgId: string, dto: AssignSeatDto): Promise<OrgSeatAssignment> {
+    return this.request<OrgSeatAssignment>(`/api/v1/organizations/${orgId}/seats/assign`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async revokeSeat(orgId: string, assignmentId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/api/v1/organizations/${orgId}/seats/${assignmentId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getTenantUsage(orgId: string): Promise<UsageMeter[]> {
+    return this.request<UsageMeter[]>(`/api/v1/organizations/${orgId}/usage`);
+  }
+
+  async recordTenantUsage(orgId: string, dto: RecordUsageDto): Promise<any> {
+    return this.request(`/api/v1/organizations/${orgId}/usage/record`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
     });
   }
 }

@@ -124,6 +124,45 @@ enum FieldPolicyType {
   MASK
 }
 
+enum SaaSProductStatus {
+  DRAFT
+  ACTIVE
+  DEPRECATED
+  ARCHIVED
+}
+
+enum FeatureType {
+  BOOLEAN
+  LIMIT
+  METERED
+}
+
+enum PlanEdition {
+  COMMUNITY
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+enum PlanPublishStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum EntitlementStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+enum SeatStatus {
+  ACTIVE
+  REVOKED
+}
+
 // 1. identity_users (Canonical user identity without Supabase Auth)
 model IdentityUser {
   id              String         @id @default(uuid()) @db.Uuid
@@ -223,6 +262,10 @@ model Organization {
   fieldPolicies       OrgFieldPolicy[]
   policyVersion       AccessPolicyVersion?
   securityAuditEvents SecurityAuditEvent[]
+  entitlements        OrgEntitlement[]
+  seatAssignments     OrgSeatAssignment[]
+  usageMeters         UsageMeter[]
+  usageEvents         UsageEvent[]
 
   @@index([slug])
   @@map("organizations")
@@ -243,6 +286,7 @@ model OrganizationMember {
   roleAssignments     OrgMemberRole[]
   teamMemberships     OrgTeamMember[]
   ledTeams            OrgTeam[]
+  seatAssignments     OrgSeatAssignment[]
 
   @@unique([organizationId, userId])
   @@index([organizationId, status])
@@ -615,4 +659,221 @@ model SecurityAuditEvent {
   @@index([organizationId, createdAt])
   @@index([action])
   @@map("security_audit_events")
+}
+
+// ==========================================
+// PHASE 1.4: Dynamic Catalog, Plans, Entitlements & Licensing
+// ==========================================
+
+// 27. saas_products (Platform products/modules catalog)
+model SaaSProduct {
+  id           String            @id @default(uuid()) @db.Uuid
+  slug         String            @unique @db.VarChar(100)
+  name         String            @db.VarChar(255)
+  description  String            @db.Text
+  icon         String?           @db.VarChar(100)
+  status       SaaSProductStatus @default(ACTIVE)
+  category     ProductCategory   @default(CORE)
+  dependencies String[]          @default([])
+  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  features        SaaSProductFeature[]
+  plans           SaaSPlan[]
+  bundleItems     SaaSBundleItem[]
+  entitlements    OrgEntitlement[]
+  seatAssignments OrgSeatAssignment[]
+
+  @@index([status])
+  @@index([category])
+  @@map("saas_products")
+}
+
+// 28. saas_product_features (Fine-grained features of products)
+model SaaSProductFeature {
+  id           String      @id @default(uuid()) @db.Uuid
+  productId    String      @map("product_id") @db.Uuid
+  code         String      @db.VarChar(100)
+  name         String      @db.VarChar(255)
+  description  String?     @db.Text
+  type         FeatureType @default(BOOLEAN)
+  defaultLimit Decimal?    @map("default_limit") @db.Decimal(14, 2)
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  product SaaSProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, code])
+  @@index([code])
+  @@map("saas_product_features")
+}
+
+// 29. saas_plans (Plans and editions for products or bundles)
+model SaaSPlan {
+  id              String            @id @default(uuid()) @db.Uuid
+  productId       String?           @map("product_id") @db.Uuid
+  name            String            @db.VarChar(255)
+  code            String            @unique @db.VarChar(100)
+  edition         PlanEdition       @default(STARTER)
+  billingInterval BillingInterval   @default(MONTHLY) @map("billing_interval")
+  isBundle        Boolean           @default(false) @map("is_bundle")
+  status          PlanPublishStatus @default(DRAFT)
+  trialDays       Int               @default(14) @map("trial_days")
+  includedSeats   Int               @default(5) @map("included_seats")
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  product      SaaSProduct?      @relation(fields: [productId], references: [id], onDelete: SetNull)
+  versions     SaaSPlanVersion[]
+  entitlements OrgEntitlement[]
+
+  @@index([status])
+  @@index([edition])
+  @@map("saas_plans")
+}
+
+// 30. saas_plan_versions (Grandfathered rates & price version history)
+model SaaSPlanVersion {
+  id            String    @id @default(uuid()) @db.Uuid
+  planId        String    @map("plan_id") @db.Uuid
+  version       Int       @default(1)
+  priceAmount   Decimal   @map("price_amount") @db.Decimal(12, 2)
+  currency      String    @default("USD") @db.VarChar(3)
+  effectiveFrom DateTime  @default(now()) @map("effective_from") @db.Timestamptz(6)
+  effectiveTo   DateTime? @map("effective_to") @db.Timestamptz(6)
+  featureLimits Json?     @map("feature_limits") @db.JsonB
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  plan         SaaSPlan         @relation(fields: [planId], references: [id], onDelete: Cascade)
+  entitlements OrgEntitlement[]
+
+  @@unique([planId, version])
+  @@index([planId, version])
+  @@map("saas_plan_versions")
+}
+
+// 31. saas_bundles (Commercial bundles and Full Suite packages)
+model SaaSBundle {
+  id          String            @id @default(uuid()) @db.Uuid
+  code        String            @unique @db.VarChar(100)
+  name        String            @db.VarChar(255)
+  description String            @db.Text
+  status      SaaSProductStatus @default(ACTIVE)
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  bundleItems  SaaSBundleItem[]
+  entitlements OrgEntitlement[]
+
+  @@map("saas_bundles")
+}
+
+// 32. saas_bundle_items (Included products in bundles)
+model SaaSBundleItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  bundleId  String   @map("bundle_id") @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  bundle  SaaSBundle  @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  product SaaSProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([bundleId, productId])
+  @@map("saas_bundle_items")
+}
+
+// 33. org_entitlements (Active tenant subscriptions & product licenses)
+model OrgEntitlement {
+  id                 String            @id @default(uuid()) @db.Uuid
+  organizationId     String            @map("organization_id") @db.Uuid
+  productId          String?           @map("product_id") @db.Uuid
+  bundleId           String?           @map("bundle_id") @db.Uuid
+  planId             String            @map("plan_id") @db.Uuid
+  planVersionId      String            @map("plan_version_id") @db.Uuid
+  status             EntitlementStatus @default(ACTIVE)
+  effectiveFrom      DateTime          @default(now()) @map("effective_from") @db.Timestamptz(6)
+  effectiveTo        DateTime?         @map("effective_to") @db.Timestamptz(6)
+  assignedSeatsLimit Int               @default(5) @map("assigned_seats_limit")
+  featureOverrides   Json?             @map("feature_overrides") @db.JsonB
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product      SaaSProduct?        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  bundle       SaaSBundle?         @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  plan         SaaSPlan            @relation(fields: [planId], references: [id], onDelete: Cascade)
+  planVersion  SaaSPlanVersion     @relation(fields: [planVersionId], references: [id], onDelete: Cascade)
+  seats        OrgSeatAssignment[]
+
+  @@index([organizationId, status])
+  @@index([productId])
+  @@index([bundleId])
+  @@map("org_entitlements")
+}
+
+// 34. org_seat_assignments (Per-member product license allocations)
+model OrgSeatAssignment {
+  id             String     @id @default(uuid()) @db.Uuid
+  organizationId String     @map("organization_id") @db.Uuid
+  memberId       String     @map("member_id") @db.Uuid
+  productId      String?    @map("product_id") @db.Uuid
+  entitlementId  String     @map("entitlement_id") @db.Uuid
+  status         SeatStatus @default(ACTIVE)
+  assignedAt     DateTime   @default(now()) @map("assigned_at") @db.Timestamptz(6)
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  member       OrganizationMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  product      SaaSProduct?       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  entitlement  OrgEntitlement     @relation(fields: [entitlementId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, memberId, entitlementId])
+  @@index([organizationId, memberId])
+  @@index([entitlementId])
+  @@map("org_seat_assignments")
+}
+
+// 35. usage_meters (Durable quota and threshold tracking per tenant/period)
+model UsageMeter {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  featureCode    String    @map("feature_code") @db.VarChar(100)
+  periodStart    DateTime  @map("period_start") @db.Timestamptz(6)
+  periodEnd      DateTime  @map("period_end") @db.Timestamptz(6)
+  currentUsage   Decimal   @default(0) @map("current_usage") @db.Decimal(14, 2)
+  softLimit      Decimal?  @map("soft_limit") @db.Decimal(14, 2)
+  hardLimit      Decimal?  @map("hard_limit") @db.Decimal(14, 2)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, featureCode, periodStart])
+  @@index([organizationId, featureCode])
+  @@map("usage_meters")
+}
+
+// 36. usage_events (Deduplicated usage intake events with operationId)
+model UsageEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  operationId    String   @unique @map("operation_id") @db.VarChar(150)
+  featureCode    String   @map("feature_code") @db.VarChar(100)
+  quantity       Decimal  @db.Decimal(14, 2)
+  timestamp      DateTime @default(now()) @db.Timestamptz(6)
+  metadata       Json?    @db.JsonB
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, featureCode, timestamp])
+  @@map("usage_events")
+}
+
+// 37. price_books (Multi-currency and regional pricing definitions)
+model PriceBook {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique @db.VarChar(100)
+  currency  String   @default("USD") @db.VarChar(3)
+  region    String   @default("GLOBAL") @db.VarChar(100)
+  isDefault Boolean  @default(false) @map("is_default")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("price_books")
 }
