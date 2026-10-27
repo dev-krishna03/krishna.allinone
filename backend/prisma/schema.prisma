@@ -1,0 +1,231 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MANAGER
+  EMPLOYEE
+  READ_ONLY
+}
+
+enum OrgStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+}
+
+enum PlanTier {
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+enum EnquiryStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CONVERTED
+  ARCHIVED
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+enum ProductStatus {
+  ACTIVE
+  BETA
+  DEPRECATED
+}
+
+enum ProductCategory {
+  CORE
+  FINANCE
+  OPERATIONS
+  GROWTH
+}
+
+enum BillingInterval {
+  MONTHLY
+  YEARLY
+}
+
+enum SupportPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum SupportStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum ApiClientStatus {
+  ACTIVE
+  REVOKED
+}
+
+// 1. organizations (Canonical bootstrap identifiers)
+model Organization {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String    @db.VarChar(255)
+  slug      String    @unique @db.VarChar(100)
+  status    OrgStatus @default(ACTIVE)
+  planTier  PlanTier  @default(STARTER)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  users           User[]
+  auditLogs       AuditLog[]
+  apiClients      ApiClient[]
+  supportRequests SupportRequest[]
+
+  @@map("organizations")
+}
+
+// 2. users (Canonical tenant user membership & identity)
+model User {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  email          String    @db.VarChar(255)
+  fullName       String    @map("full_name") @db.VarChar(255)
+  role           UserRole  @default(EMPLOYEE)
+  status         String    @default("ACTIVE") @db.VarChar(50)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  auditLogs      AuditLog[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@index([email])
+  @@map("users")
+}
+
+// 3. marketing_enquiries (Lead / demo requests - disjoint from CRM account)
+model MarketingEnquiry {
+  id              String        @id @default(uuid()) @db.Uuid
+  name            String        @db.VarChar(255)
+  email           String        @db.VarChar(255)
+  companyName     String        @map("company_name") @db.VarChar(255)
+  productInterest String?       @map("product_interest") @db.VarChar(100)
+  message         String        @db.Text
+  status          EnquiryStatus @default(NEW)
+  source          String?       @default("website") @db.VarChar(100)
+  ipAddress       String?       @map("ip_address") @db.VarChar(45)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([email])
+  @@index([status])
+  @@map("marketing_enquiries")
+}
+
+// 4. platform_event_outbox (Transactional Outbox)
+model PlatformEventOutbox {
+  id            String       @id @default(uuid()) @db.Uuid
+  eventName     String       @map("event_name") @db.VarChar(150)
+  aggregateType String       @map("aggregate_type") @db.VarChar(100)
+  aggregateId   String       @map("aggregate_id") @db.VarChar(100)
+  payload       Json         @db.JsonB
+  status        OutboxStatus @default(PENDING)
+  retryCount    Int          @default(0) @map("retry_count")
+  lastError     String?      @map("last_error") @db.Text
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  processedAt   DateTime?    @map("processed_at") @db.Timestamptz(6)
+
+  @@index([status, createdAt])
+  @@index([aggregateType, aggregateId])
+  @@map("platform_event_outbox")
+}
+
+// 5. audit_log (Immutable security and operational event log)
+model AuditLog {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String?   @map("organization_id") @db.Uuid
+  actorId        String?   @map("actor_id") @db.Uuid
+  action         String    @db.VarChar(100)
+  entityType     String    @map("entity_type") @db.VarChar(100)
+  entityId       String?   @map("entity_id") @db.VarChar(100)
+  metadata       Json?     @db.JsonB
+  ipAddress      String?   @map("ip_address") @db.VarChar(45)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  actor          User?         @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([action])
+  @@map("audit_log")
+}
+
+// 6. product_catalog_placeholder (Dynamic product & pricing catalog)
+model ProductCatalogPlaceholder {
+  id              String          @id @default(uuid()) @db.Uuid
+  code            String          @unique @db.VarChar(100)
+  name            String          @db.VarChar(255)
+  description     String          @db.Text
+  category        ProductCategory @default(CORE)
+  priceAmount     Decimal         @map("price_amount") @db.Decimal(12, 2)
+  currency        String          @default("USD") @db.VarChar(3)
+  billingInterval BillingInterval @default(MONTHLY) @map("billing_interval")
+  status          ProductStatus   @default(ACTIVE)
+  features        String[]        @default([])
+  metadata        Json?           @db.JsonB
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([status])
+  @@index([category])
+  @@map("product_catalog_placeholder")
+}
+
+// 7. api_clients (Developer Console API tokens)
+model ApiClient {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @map("organization_id") @db.Uuid
+  name           String          @db.VarChar(255)
+  clientId       String          @unique @map("client_id") @db.VarChar(100)
+  hashedSecret   String          @map("hashed_secret") @db.VarChar(255)
+  scopes         String[]        @default(["read"])
+  status         ApiClientStatus @default(ACTIVE)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  revokedAt      DateTime?       @map("revoked_at") @db.Timestamptz(6)
+
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("api_clients")
+}
+
+// 8. support_requests (Support tracking)
+model SupportRequest {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @map("organization_id") @db.Uuid
+  requesterEmail String          @map("requester_email") @db.VarChar(255)
+  subject        String          @db.VarChar(255)
+  priority       SupportPriority @default(MEDIUM)
+  status         SupportStatus   @default(OPEN)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("support_requests")
+}
