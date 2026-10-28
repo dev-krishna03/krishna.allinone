@@ -11,7 +11,7 @@ export class DeveloperService {
   ) {}
 
   async getDiagnostics() {
-    const [pendingEvents, recentEvents, clientCount, apiKeyCount] = await Promise.all([
+    const [pendingEvents, recentEvents, clientCount, apiKeyCount, totalCollabSnapshots, recentCollabEvents] = await Promise.all([
       this.prisma.platformEventOutbox.count({ where: { status: OutboxStatus.PENDING } }),
       this.prisma.platformEventOutbox.findMany({
         orderBy: { createdAt: 'desc' },
@@ -19,6 +19,10 @@ export class DeveloperService {
       }),
       this.prisma.apiClient.count(),
       this.prisma.developerApiKey.count({ where: { revokedAt: null } }),
+      this.prisma.wsPageCollabSnapshot.count(),
+      this.prisma.wsPageCollabEvent.count({
+        where: { createdAt: { gte: new Date(Date.now() - 3600 * 1000) } },
+      }),
     ]);
 
     return {
@@ -35,6 +39,11 @@ export class DeveloperService {
       },
       apiClientsCount: clientCount,
       activeApiKeysCount: apiKeyCount,
+      crdtTelemetry: {
+        totalSnapshots: totalCollabSnapshots,
+        recentEventsPastHour: recentCollabEvents,
+        syncEngine: 'Yjs CRDT Document Room Engine',
+      },
     };
   }
 

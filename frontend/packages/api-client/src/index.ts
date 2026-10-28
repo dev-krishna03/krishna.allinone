@@ -76,6 +76,28 @@ import {
   CreateWebhookSubscriptionDto,
   WebhookDelivery,
   SystemHealthReport,
+  WsWorkspace,
+  WsPage,
+  WsPageBlock,
+  WsPageRevision,
+  WsPagePermission,
+  WsPageComment,
+  WsPageCollabSnapshot,
+  CreateWorkspaceDto,
+  UpdateWorkspaceDto,
+  CreatePageDto,
+  UpdatePageDto,
+  MovePageDto,
+  DuplicatePageDto,
+  PublishPageDto,
+  CreateBlockDto,
+  UpdateBlockDto,
+  ReorderBlocksDto,
+  CreateRevisionDto,
+  RevertRevisionDto,
+  CreatePermissionDto,
+  CreateCommentDto,
+  CollabTokenResponse,
 } from '@business-os/types';
 
 export interface ApiClientConfig {
@@ -774,6 +796,241 @@ export class BusinessOSApiClient {
 
   async listWebhookDeliveries(orgId: string, subscriptionId: string): Promise<WebhookDelivery[]> {
     return this.request<WebhookDelivery[]>(`/api/v1/organizations/${orgId}/webhooks/${subscriptionId}/deliveries`);
+  }
+
+  // ==========================================
+  // WORKSPACE, DOCUMENTS & COLLAB API
+  // ==========================================
+
+  // --- Workspaces ---
+  async listWorkspaces(orgId: string): Promise<WsWorkspace[]> {
+    return this.request<WsWorkspace[]>(`/api/v1/organizations/${orgId}/workspace`);
+  }
+
+  async createWorkspace(orgId: string, dto: CreateWorkspaceDto): Promise<WsWorkspace> {
+    return this.request<WsWorkspace>(`/api/v1/organizations/${orgId}/workspace`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async getWorkspace(orgId: string, workspaceId: string): Promise<WsWorkspace> {
+    return this.request<WsWorkspace>(`/api/v1/organizations/${orgId}/workspace/${workspaceId}`);
+  }
+
+  async updateWorkspace(orgId: string, workspaceId: string, dto: UpdateWorkspaceDto): Promise<WsWorkspace> {
+    return this.request<WsWorkspace>(`/api/v1/organizations/${orgId}/workspace/${workspaceId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  // --- Pages ---
+  async listPages(
+    orgId: string,
+    params?: {
+      workspaceId?: string;
+      isDeleted?: boolean;
+      isTemplate?: boolean;
+      templateCategory?: string;
+      parentId?: string | null;
+    },
+  ): Promise<WsPage[]> {
+    const query = new URLSearchParams();
+    if (params?.workspaceId) query.set('workspaceId', params.workspaceId);
+    if (params?.isDeleted !== undefined) query.set('isDeleted', String(params.isDeleted));
+    if (params?.isTemplate !== undefined) query.set('isTemplate', String(params.isTemplate));
+    if (params?.templateCategory) query.set('templateCategory', params.templateCategory);
+    if (params?.parentId !== undefined) query.set('parentId', params.parentId === null ? 'null' : params.parentId);
+    const qs = query.toString() ? `?${query.toString()}` : '';
+
+    return this.request<WsPage[]>(`/api/v1/organizations/${orgId}/workspace/pages${qs}`);
+  }
+
+  async createPage(orgId: string, dto: CreatePageDto): Promise<WsPage> {
+    return this.request<WsPage>(`/api/v1/organizations/${orgId}/workspace/pages`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async getPage(orgId: string, pageId: string): Promise<WsPage> {
+    return this.request<WsPage>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}`);
+  }
+
+  async updatePage(orgId: string, pageId: string, dto: UpdatePageDto): Promise<WsPage> {
+    return this.request<WsPage>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async deletePage(orgId: string, pageId: string): Promise<WsPage> {
+    return this.request<WsPage>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async permanentlyDeletePage(orgId: string, pageId: string): Promise<WsPage> {
+    return this.request<WsPage>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/permanent`, {
+      method: 'DELETE',
+    });
+  }
+
+  async restorePage(orgId: string, pageId: string): Promise<WsPage> {
+    return this.request<WsPage>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/restore`, {
+      method: 'POST',
+    });
+  }
+
+  async movePage(orgId: string, pageId: string, dto: MovePageDto): Promise<WsPage> {
+    return this.request<WsPage>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/move`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async duplicatePage(orgId: string, pageId: string, dto: DuplicatePageDto): Promise<WsPage> {
+    return this.request<WsPage>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/duplicate`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async togglePageFavorite(orgId: string, pageId: string): Promise<{ isFavorite: boolean }> {
+    return this.request<{ isFavorite: boolean }>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/favorite`, {
+      method: 'POST',
+    });
+  }
+
+  async publishPage(orgId: string, pageId: string, dto: PublishPageDto): Promise<WsPage> {
+    return this.request<WsPage>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/publish`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async getPublicPage(publishedSlug: string): Promise<any> {
+    return this.request<any>(`/api/v1/public/pages/${publishedSlug}`);
+  }
+
+  // --- Blocks ---
+  async listBlocks(orgId: string, pageId: string): Promise<WsPageBlock[]> {
+    return this.request<WsPageBlock[]>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/blocks`);
+  }
+
+  async createBlock(orgId: string, pageId: string, dto: CreateBlockDto): Promise<WsPageBlock> {
+    return this.request<WsPageBlock>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/blocks`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async updateBlock(orgId: string, pageId: string, blockId: string, dto: UpdateBlockDto): Promise<WsPageBlock> {
+    return this.request<WsPageBlock>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/blocks/${blockId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async deleteBlock(orgId: string, pageId: string, blockId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/blocks/${blockId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async reorderBlocks(orgId: string, pageId: string, dto: ReorderBlocksDto): Promise<WsPageBlock[]> {
+    return this.request<WsPageBlock[]>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/blocks/reorder`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  // --- Versions & Revisions ---
+  async listPageRevisions(orgId: string, pageId: string): Promise<WsPageRevision[]> {
+    return this.request<WsPageRevision[]>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/versions`);
+  }
+
+  async getPageRevision(orgId: string, pageId: string, version: number): Promise<WsPageRevision> {
+    return this.request<WsPageRevision>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/versions/${version}`);
+  }
+
+  async createNamedRevision(orgId: string, pageId: string, dto: CreateRevisionDto): Promise<WsPageRevision> {
+    return this.request<WsPageRevision>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/versions`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async revertPageRevision(orgId: string, pageId: string, dto: RevertRevisionDto): Promise<{ success: boolean; page: WsPage; revision: WsPageRevision }> {
+    return this.request<{ success: boolean; page: WsPage; revision: WsPageRevision }>(
+      `/api/v1/organizations/${orgId}/workspace/pages/${pageId}/versions/revert`,
+      {
+        method: 'POST',
+        body: JSON.stringify(dto),
+      },
+    );
+  }
+
+  // --- Permissions / Sharing ---
+  async listPagePermissions(orgId: string, pageId: string): Promise<WsPagePermission[]> {
+    return this.request<WsPagePermission[]>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/share`);
+  }
+
+  async grantPagePermission(orgId: string, pageId: string, dto: CreatePermissionDto): Promise<WsPagePermission> {
+    return this.request<WsPagePermission>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/share`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async revokePagePermission(orgId: string, pageId: string, permissionId: string): Promise<WsPagePermission> {
+    return this.request<WsPagePermission>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/share/${permissionId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // --- Comments ---
+  async listPageComments(orgId: string, pageId: string): Promise<WsPageComment[]> {
+    return this.request<WsPageComment[]>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/comments`);
+  }
+
+  async createPageComment(orgId: string, pageId: string, dto: CreateCommentDto): Promise<WsPageComment> {
+    return this.request<WsPageComment>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async resolvePageComment(orgId: string, pageId: string, commentId: string, isResolved = true): Promise<WsPageComment> {
+    return this.request<WsPageComment>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/comments/${commentId}/resolve`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isResolved }),
+    });
+  }
+
+  async deletePageComment(orgId: string, pageId: string, commentId: string): Promise<WsPageComment> {
+    return this.request<WsPageComment>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/comments/${commentId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // --- Real-Time Collab ---
+  async generateCollabToken(orgId: string, pageId: string): Promise<CollabTokenResponse> {
+    return this.request<CollabTokenResponse>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/collab/token`, {
+      method: 'POST',
+    });
+  }
+
+  async listCollabSnapshots(orgId: string, pageId: string): Promise<WsPageCollabSnapshot[]> {
+    return this.request<WsPageCollabSnapshot[]>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/collab/snapshots`);
+  }
+
+  async saveCollabSnapshot(orgId: string, pageId: string, snapshot: any): Promise<any> {
+    return this.request<any>(`/api/v1/organizations/${orgId}/workspace/pages/${pageId}/collab/snapshots`, {
+      method: 'POST',
+      body: JSON.stringify(snapshot),
+    });
   }
 }
 

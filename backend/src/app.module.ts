@@ -19,6 +19,7 @@ import { BillingModule } from './modules/billing/billing.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { WebhooksGovernanceModule } from './modules/webhooks/webhooks-governance.module';
+import { WorkspaceModule } from './modules/workspace/workspace.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { WebhooksGovernanceModule } from './modules/webhooks/webhooks-governance
     IntegrationsModule,
     MarketplaceModule,
     WebhooksGovernanceModule,
+    WorkspaceModule,
   ],
 })
 export class AppModule {}

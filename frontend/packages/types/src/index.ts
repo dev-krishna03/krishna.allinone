@@ -1234,4 +1234,283 @@ export interface UpdateWebhookSubscriptionDto {
   status?: WebhookSubscriptionStatus;
 }
 
+// ==========================================
+// PHASE 2.1: WORKSPACE, DOCUMENTS & COLLAB TYPES
+// ==========================================
+
+export type PageAccessLevel = 'OWNER' | 'EDITOR' | 'COMMENTER' | 'VIEWER';
+export type PageType = 'DOCUMENT' | 'CANVAS' | 'DATABASE_VIEW' | 'TEMPLATE';
+export type BlockType =
+  | 'HEADING_1'
+  | 'HEADING_2'
+  | 'HEADING_3'
+  | 'PARAGRAPH'
+  | 'BULLET_LIST'
+  | 'NUMBERED_LIST'
+  | 'CHECK_LIST'
+  | 'QUOTE'
+  | 'CODE'
+  | 'TABLE'
+  | 'CALLOUT'
+  | 'TOGGLE'
+  | 'DIVIDER'
+  | 'IMAGE'
+  | 'EMBED';
+export type CollabSnapshotType = 'AUTOSAVE' | 'CHECKPOINT' | 'MANUAL' | 'CRDT_STATE';
+
+export interface WsWorkspace {
+  id: string;
+  organizationId: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  icon?: string | null;
+  isDefault: boolean;
+  settings: Record<string, any>;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  pageCount?: number;
+}
+
+export interface WsPage {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  parentId?: string | null;
+  title: string;
+  icon?: string | null;
+  coverUrl?: string | null;
+  type: PageType;
+  isPublished: boolean;
+  publishedSlug?: string | null;
+  isTemplate: boolean;
+  templateCategory?: string | null;
+  isArchived: boolean;
+  isDeleted: boolean;
+  deletedAt?: string | Date | null;
+  deletedById?: string | null;
+  orderIndex: number;
+  depth: number;
+  createdById: string;
+  updatedById?: string | null;
+  currentVersion: number;
+  contentJson?: Record<string, any> | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  parent?: { id: string; title: string; icon?: string | null } | null;
+  children?: WsPage[];
+  userAccessLevel?: PageAccessLevel;
+  isFavorite?: boolean;
+}
+
+export interface WsPageBlock {
+  id: string;
+  organizationId: string;
+  pageId: string;
+  parentBlockId?: string | null;
+  blockType: BlockType;
+  orderIndex: number;
+  content: Record<string, any>;
+  properties: Record<string, any>;
+  createdById: string;
+  updatedById?: string | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  childBlocks?: WsPageBlock[];
+}
+
+export interface WsPageRevision {
+  id: string;
+  organizationId: string;
+  pageId: string;
+  version: number;
+  title: string;
+  contentJson: Record<string, any>;
+  description?: string | null;
+  isNamed: boolean;
+  createdById: string;
+  createdAt: string | Date;
+  createdByName?: string;
+}
+
+export interface WsPagePermission {
+  id: string;
+  organizationId: string;
+  pageId: string;
+  userId?: string | null;
+  roleId?: string | null;
+  teamId?: string | null;
+  accessLevel: PageAccessLevel;
+  isInherited: boolean;
+  grantedById: string;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  userName?: string;
+  userEmail?: string;
+  roleName?: string;
+  teamName?: string;
+}
+
+export interface WsPageComment {
+  id: string;
+  organizationId: string;
+  pageId: string;
+  parentCommentId?: string | null;
+  blockId?: string | null;
+  highlightText?: string | null;
+  content: string;
+  authorId: string;
+  isResolved: boolean;
+  resolvedById?: string | null;
+  resolvedAt?: string | Date | null;
+  mentions: string[];
+  attachments: any[];
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  authorName?: string;
+  authorEmail?: string;
+  childComments?: WsPageComment[];
+}
+
+export interface WsPageCollabSnapshot {
+  id: string;
+  organizationId: string;
+  pageId: string;
+  snapshotType: CollabSnapshotType;
+  stateVector?: string | null;
+  crdtData?: string | null;
+  version: number;
+  clientCount: number;
+  metadata: Record<string, any>;
+  createdAt: string | Date;
+}
+
+export interface WsPageCollabEvent {
+  id: string;
+  organizationId: string;
+  pageId: string;
+  userId: string;
+  eventType: string;
+  cursorPosition?: Record<string, any> | null;
+  payload: Record<string, any>;
+  createdAt: string | Date;
+}
+
+export interface WsPageFavorite {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  pageId: string;
+  userId: string;
+  orderIndex: number;
+  createdAt: string | Date;
+}
+
+// Workspace DTOs
+export interface CreateWorkspaceDto {
+  name: string;
+  slug?: string;
+  description?: string;
+  icon?: string;
+  isDefault?: boolean;
+}
+
+export interface UpdateWorkspaceDto {
+  name?: string;
+  slug?: string;
+  description?: string;
+  icon?: string;
+  settings?: Record<string, any>;
+}
+
+export interface CreatePageDto {
+  workspaceId?: string;
+  parentId?: string;
+  title: string;
+  icon?: string;
+  coverUrl?: string;
+  type?: PageType;
+  isTemplate?: boolean;
+  templateCategory?: string;
+  contentJson?: Record<string, any>;
+}
+
+export interface UpdatePageDto {
+  title?: string;
+  icon?: string;
+  coverUrl?: string;
+  contentJson?: Record<string, any>;
+  isArchived?: boolean;
+  type?: PageType;
+}
+
+export interface MovePageDto {
+  targetParentId?: string | null;
+  targetOrderIndex?: number;
+}
+
+export interface DuplicatePageDto {
+  targetParentId?: string | null;
+  includeChildren?: boolean;
+}
+
+export interface PublishPageDto {
+  isPublished: boolean;
+  publishedSlug?: string;
+}
+
+export interface CreateBlockDto {
+  parentBlockId?: string;
+  blockType: BlockType;
+  orderIndex?: number;
+  content: Record<string, any>;
+  properties?: Record<string, any>;
+}
+
+export interface UpdateBlockDto {
+  blockType?: BlockType;
+  content?: Record<string, any>;
+  properties?: Record<string, any>;
+  orderIndex?: number;
+}
+
+export interface ReorderBlocksDto {
+  blockIds: string[];
+}
+
+export interface CreateRevisionDto {
+  description?: string;
+  isNamed?: boolean;
+}
+
+export interface RevertRevisionDto {
+  version: number;
+}
+
+export interface CreatePermissionDto {
+  userId?: string;
+  roleId?: string;
+  teamId?: string;
+  accessLevel: PageAccessLevel;
+}
+
+export interface CreateCommentDto {
+  parentCommentId?: string;
+  blockId?: string;
+  highlightText?: string;
+  content: string;
+  mentions?: string[];
+  attachments?: any[];
+}
+
+export interface CollabTokenResponse {
+  token: string;
+  roomId: string;
+  pageId: string;
+  userId: string;
+  accessLevel: PageAccessLevel;
+  expiresInSeconds: number;
+}
+
+
 
