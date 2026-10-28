@@ -59,6 +59,23 @@ import {
   CreateCheckoutSessionDto,
   ChangeSubscriptionDto,
   UpdatePaymentMethodDto,
+  PlatformIncident,
+  CreateIncidentDto,
+  UpdateIncidentDto,
+  FeatureRollout,
+  CreateFeatureRolloutDto,
+  UpdateFeatureRolloutDto,
+  QueueTelemetry,
+  PlatformEventOutbox,
+  DeveloperApiKey,
+  CreateDeveloperApiKeyDto,
+  ConnectorProvider,
+  ConnectorInstallation,
+  MarketplaceListing,
+  WebhookSubscription,
+  CreateWebhookSubscriptionDto,
+  WebhookDelivery,
+  SystemHealthReport,
 } from '@business-os/types';
 
 export interface ApiClientConfig {
@@ -605,6 +622,158 @@ export class BusinessOSApiClient {
     return this.request(`/api/v1/admin/billing/webhook-events/${eventId}/retry`, {
       method: 'POST',
     });
+  }
+
+  // ==========================================
+  // PHASE 1.6 — PLATFORM GOVERNANCE & INTEGRATIONS
+  // ==========================================
+
+  // --- System Health & Platform Incidents ---
+  async getSystemHealth(): Promise<SystemHealthReport> {
+    return this.request<SystemHealthReport>('/api/v1/platform/system-health');
+  }
+
+  async listIncidents(status?: string): Promise<PlatformIncident[]> {
+    const q = status ? `?status=${encodeURIComponent(status)}` : '';
+    return this.request<PlatformIncident[]>(`/api/v1/platform/incidents${q}`);
+  }
+
+  async createIncident(dto: CreateIncidentDto): Promise<PlatformIncident> {
+    return this.request<PlatformIncident>('/api/v1/platform/incidents', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async updateIncident(id: string, dto: UpdateIncidentDto): Promise<PlatformIncident> {
+    return this.request<PlatformIncident>(`/api/v1/platform/incidents/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  // --- Feature Rollouts Governance ---
+  async listFeatureFlags(): Promise<FeatureRollout[]> {
+    return this.request<FeatureRollout[]>('/api/v1/platform/feature-flags');
+  }
+
+  async createFeatureFlag(dto: CreateFeatureRolloutDto): Promise<FeatureRollout> {
+    return this.request<FeatureRollout>('/api/v1/platform/feature-flags', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async updateFeatureFlag(id: string, dto: UpdateFeatureRolloutDto): Promise<FeatureRollout> {
+    return this.request<FeatureRollout>(`/api/v1/platform/feature-flags/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  // --- Developer Queue & Durable Outbox Telemetry ---
+  async getQueueTelemetry(): Promise<QueueTelemetry[]> {
+    return this.request<QueueTelemetry[]>('/api/v1/developer/queues');
+  }
+
+  async listOutboxEvents(params?: { status?: string; limit?: number }): Promise<PlatformEventOutbox[]> {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.set('status', params.status);
+    if (params?.limit) searchParams.set('limit', params.limit.toString());
+    const query = searchParams.toString() ? `?${searchParams.toString()}` : '';
+    return this.request<PlatformEventOutbox[]>(`/api/v1/developer/events${query}`);
+  }
+
+  async replayOutboxEvent(id: string): Promise<any> {
+    return this.request(`/api/v1/developer/events/${id}/replay`, {
+      method: 'POST',
+    });
+  }
+
+  // --- Developer API Keys ---
+  async listDeveloperApiKeys(orgId: string): Promise<DeveloperApiKey[]> {
+    return this.request<DeveloperApiKey[]>(`/api/v1/organizations/${orgId}/developer/api-keys`);
+  }
+
+  async createDeveloperApiKey(orgId: string, dto: CreateDeveloperApiKeyDto): Promise<DeveloperApiKey> {
+    return this.request<DeveloperApiKey>(`/api/v1/organizations/${orgId}/developer/api-keys`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async revokeDeveloperApiKey(orgId: string, keyId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/api/v1/organizations/${orgId}/developer/api-keys/${keyId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // --- Connectors & OAuth Integrations ---
+  async listConnectorProviders(): Promise<ConnectorProvider[]> {
+    return this.request<ConnectorProvider[]>('/api/v1/platform/connectors/providers');
+  }
+
+  async listOrgIntegrations(orgId: string): Promise<ConnectorInstallation[]> {
+    return this.request<ConnectorInstallation[]>(`/api/v1/organizations/${orgId}/integrations`);
+  }
+
+  async initiateOAuthConnect(orgId: string, providerSlug: string, redirectUri?: string): Promise<{ authUrl: string; state: string }> {
+    return this.request<{ authUrl: string; state: string }>(`/api/v1/integrations/${providerSlug}/connect`, {
+      method: 'POST',
+      body: JSON.stringify({ organizationId: orgId, redirectUri }),
+    });
+  }
+
+  async disconnectIntegration(orgId: string, providerId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/api/v1/organizations/${orgId}/integrations/${providerId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // --- Marketplace Listings ---
+  async listMarketplaceApps(category?: string): Promise<MarketplaceListing[]> {
+    const q = category ? `?category=${encodeURIComponent(category)}` : '';
+    return this.request<MarketplaceListing[]>(`/api/v1/marketplace/listings${q}`);
+  }
+
+  async getMarketplaceApp(slug: string): Promise<MarketplaceListing> {
+    return this.request<MarketplaceListing>(`/api/v1/marketplace/listings/${slug}`);
+  }
+
+  async installMarketplaceApp(orgId: string, slug: string): Promise<{ success: boolean; installation?: ConnectorInstallation }> {
+    return this.request<{ success: boolean; installation?: ConnectorInstallation }>(
+      `/api/v1/organizations/${orgId}/marketplace/install/${slug}`,
+      { method: 'POST' }
+    );
+  }
+
+  // --- Webhooks Governance ---
+  async listWebhookSubscriptions(orgId: string): Promise<WebhookSubscription[]> {
+    return this.request<WebhookSubscription[]>(`/api/v1/organizations/${orgId}/webhooks`);
+  }
+
+  async createWebhookSubscription(orgId: string, dto: CreateWebhookSubscriptionDto): Promise<WebhookSubscription> {
+    return this.request<WebhookSubscription>(`/api/v1/organizations/${orgId}/webhooks`, {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  async deleteWebhookSubscription(orgId: string, id: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/api/v1/organizations/${orgId}/webhooks/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async testWebhookSubscription(orgId: string, id: string): Promise<{ success: boolean; statusCode?: number; durationMs?: number }> {
+    return this.request<{ success: boolean; statusCode?: number; durationMs?: number }>(
+      `/api/v1/organizations/${orgId}/webhooks/${id}/test`,
+      { method: 'POST' }
+    );
+  }
+
+  async listWebhookDeliveries(orgId: string, subscriptionId: string): Promise<WebhookDelivery[]> {
+    return this.request<WebhookDelivery[]>(`/api/v1/organizations/${orgId}/webhooks/${subscriptionId}/deliveries`);
   }
 }
 

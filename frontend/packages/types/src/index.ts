@@ -958,3 +958,280 @@ export interface UpdatePaymentMethodDto {
   expiryYear?: string;
 }
 
+// ==========================================
+// PHASE 1.6 — PLATFORM GOVERNANCE & MARKETPLACE
+// ==========================================
+
+export type PlatformAdminRoleType = 'PLATFORM_ADMIN' | 'OPERATOR' | 'SUPPORT_TIER_2' | 'SECURITY_OFFICER';
+export type IncidentSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type IncidentStatus = 'OPEN' | 'INVESTIGATING' | 'MITIGATED' | 'RESOLVED';
+export type ConnectorAuthType = 'OAUTH2' | 'API_KEY' | 'WEBHOOK' | 'CUSTOM';
+export type ConnectorInstallationStatus = 'PENDING' | 'CONNECTED' | 'EXPIRED' | 'REVOKED' | 'FAILED';
+export type WebhookSubscriptionStatus = 'ACTIVE' | 'SUSPENDED' | 'FAILING';
+export type WebhookDeliveryStatus = 'PENDING' | 'DELIVERED' | 'FAILED' | 'RETRYING';
+export type MarketplaceReviewStatus = 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'REJECTED' | 'PUBLISHED';
+export type MarketplacePricingType = 'FREE' | 'INCLUDED' | 'PAID_ADDON';
+
+export interface PlatformAdminRole {
+  id: string;
+  userId: string;
+  role: PlatformAdminRoleType;
+  permissions: string[];
+  assignedAt: string;
+  assignedBy?: string | null;
+}
+
+export interface PlatformIncident {
+  id: string;
+  incidentNumber: string;
+  title: string;
+  description: string;
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+  affectedServices: string[];
+  impactedOrganizationsCount: number;
+  declaredByUserId?: string | null;
+  resolvedAt?: string | null;
+  timeline: Array<{
+    timestamp: string;
+    message: string;
+    status: IncidentStatus;
+    author?: string;
+  }>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConnectorProvider {
+  id: string;
+  slug: string;
+  name: string;
+  category: string;
+  description?: string | null;
+  iconUrl?: string | null;
+  authType: ConnectorAuthType;
+  clientId?: string | null;
+  authUrl?: string | null;
+  tokenUrl?: string | null;
+  scopesSupported: string[];
+  isEnabled: boolean;
+  isVerified: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConnectorInstallation {
+  id: string;
+  organizationId: string;
+  providerId: string;
+  status: ConnectorInstallationStatus;
+  installedByUserId?: string | null;
+  scopesGranted: string[];
+  settings: Record<string, any>;
+  externalAccountId?: string | null;
+  externalAccountEmail?: string | null;
+  lastSyncAt?: string | null;
+  errorMessage?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  provider?: ConnectorProvider;
+}
+
+export interface DeveloperApiKey {
+  id: string;
+  organizationId: string;
+  name: string;
+  keyPrefix: string;
+  scopes: string[];
+  rateLimitPerMin: number;
+  monthlyQuota: number;
+  usageCount: number;
+  lastUsedAt?: string | null;
+  expiresAt?: string | null;
+  revokedAt?: string | null;
+  createdByUserId?: string | null;
+  createdAt: string;
+  rawKey?: string; // Only returned on generation
+}
+
+export interface WebhookSubscription {
+  id: string;
+  organizationId: string;
+  targetUrl: string;
+  secretKey: string;
+  subscribedEvents: string[];
+  status: WebhookSubscriptionStatus;
+  failureCount: number;
+  failureThreshold: number;
+  lastDeliveredAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  subscriptionId: string;
+  eventId: string;
+  eventType: string;
+  payload: Record<string, any>;
+  responseStatusCode?: number | null;
+  responseBody?: string | null;
+  executionDurationMs?: number | null;
+  attemptNumber: number;
+  status: WebhookDeliveryStatus;
+  errorMessage?: string | null;
+  nextRetryAt?: string | null;
+  createdAt: string;
+}
+
+export interface MarketplaceListing {
+  id: string;
+  slug: string;
+  name: string;
+  category: string;
+  shortDescription: string;
+  longDescription?: string | null;
+  iconUrl?: string | null;
+  developerName: string;
+  version: string;
+  pricingType: MarketplacePricingType;
+  priceAmount: number;
+  requiredScopes: string[];
+  capabilities: string[];
+  installCount: number;
+  reviewStatus: MarketplaceReviewStatus;
+  isFeatured: boolean;
+  publishedAt?: string | null;
+  createdAt: string;
+  isInstalled?: boolean;
+}
+
+export interface FeatureRollout {
+  id: string;
+  flagKey: string;
+  name: string;
+  description?: string | null;
+  isEnabled: boolean;
+  rolloutPercentage: number;
+  targetEditions: string[];
+  targetOrganizationIds: string[];
+  targetUserIds: string[];
+  metadata: Record<string, any>;
+  updatedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlatformEventOutbox {
+  id: string;
+  eventName: string;
+  aggregateType: string;
+  aggregateId: string;
+  payload: Record<string, any>;
+  status: 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED';
+  retryCount: number;
+  lastError?: string | null;
+  scheduledAt: string;
+  processedAt?: string | null;
+  createdAt: string;
+}
+
+export interface QueueJobTelemetry {
+  id: string;
+  name: string;
+  status: 'active' | 'waiting' | 'completed' | 'failed' | 'delayed';
+  data: any;
+  timestamp: number;
+  processedOn?: number;
+  finishedOn?: number;
+  failedReason?: string;
+  attemptsMade: number;
+}
+
+export interface QueueTelemetry {
+  name: string;
+  isPaused: boolean;
+  counts: {
+    waiting: number;
+    active: number;
+    completed: number;
+    failed: number;
+    delayed: number;
+    paused: number;
+  };
+  recentJobs: QueueJobTelemetry[];
+}
+
+export interface SystemHealthReport {
+  status: 'healthy' | 'degraded' | 'critical';
+  timestamp: string;
+  version: string;
+  uptimeSeconds: number;
+  environment: string;
+  services: {
+    database: { status: 'up' | 'down'; latencyMs: number };
+    redis: { status: 'up' | 'down'; latencyMs: number };
+    outbox: { pendingEvents: number; failedEvents: number };
+  };
+  metrics: {
+    heapUsedMB: number;
+    heapTotalMB: number;
+    rssMB: number;
+    cpuUserMs: number;
+  };
+}
+
+// Phase 1.6 DTOs
+export interface CreateIncidentDto {
+  title: string;
+  description: string;
+  severity: IncidentSeverity;
+  affectedServices: string[];
+}
+
+export interface UpdateIncidentDto {
+  status?: IncidentStatus;
+  severity?: IncidentSeverity;
+  timelineMessage?: string;
+}
+
+export interface CreateFeatureRolloutDto {
+  flagKey: string;
+  name: string;
+  description?: string;
+  isEnabled?: boolean;
+  rolloutPercentage?: number;
+  targetEditions?: string[];
+  targetOrganizationIds?: string[];
+}
+
+export interface UpdateFeatureRolloutDto {
+  name?: string;
+  description?: string;
+  isEnabled?: boolean;
+  rolloutPercentage?: number;
+  targetEditions?: string[];
+  targetOrganizationIds?: string[];
+}
+
+export interface CreateDeveloperApiKeyDto {
+  name: string;
+  scopes?: string[];
+  rateLimitPerMin?: number;
+  monthlyQuota?: number;
+  expiresInDays?: number;
+}
+
+export interface CreateWebhookSubscriptionDto {
+  targetUrl: string;
+  subscribedEvents: string[];
+  secretKey?: string;
+}
+
+export interface UpdateWebhookSubscriptionDto {
+  targetUrl?: string;
+  subscribedEvents?: string[];
+  status?: WebhookSubscriptionStatus;
+}
+
+

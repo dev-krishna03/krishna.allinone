@@ -14,6 +14,7 @@ export function SettingsNav() {
     { label: 'Permission Matrix', href: '/settings/permissions' },
     { label: 'Policies & Simulator', href: '/settings/access-policies' },
     { label: 'Billing & Invoices', href: '/settings/billing' },
+    { label: 'Integrations & Connectors', href: '/settings/integrations' },
     { label: 'Subscription', href: '/settings/subscription' },
     { label: 'Seat Licenses', href: '/settings/licenses' },
     { label: 'Security Audit', href: '/settings/security-audit' },

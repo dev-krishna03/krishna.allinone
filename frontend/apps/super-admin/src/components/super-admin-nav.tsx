@@ -14,6 +14,8 @@ export function SuperAdminNav() {
     { label: 'Price Books & Versions', href: '/super-admin/pricing' },
     { label: 'SaaS Billing & MRR', href: '/super-admin/billing' },
     { label: 'Payments & Webhooks', href: '/super-admin/payments' },
+    { label: 'System & Incidents', href: '/super-admin/system' },
+    { label: 'Feature Rollouts', href: '/super-admin/feature-flags' },
   ];
 
   return (
