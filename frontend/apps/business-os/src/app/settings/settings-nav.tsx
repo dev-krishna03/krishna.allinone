@@ -15,6 +15,7 @@ export function SettingsNav() {
     { label: 'Policies & Simulator', href: '/settings/access-policies' },
     { label: 'Billing & Invoices', href: '/settings/billing' },
     { label: 'Integrations & Connectors', href: '/settings/integrations' },
+    { label: 'Workspace & Docs', href: '/settings/workspace' },
     { label: 'Subscription', href: '/settings/subscription' },
     { label: 'Seat Licenses', href: '/settings/licenses' },
     { label: 'Security Audit', href: '/settings/security-audit' },

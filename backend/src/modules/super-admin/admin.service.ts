@@ -67,12 +67,14 @@ export class SuperAdminService {
       dbStatus = 'down';
     }
 
-    const [pendingOutbox, failedOutbox, activeIncidents] = await Promise.all([
+    const [pendingOutbox, failedOutbox, activeIncidents, totalPages, totalRevisions] = await Promise.all([
       this.prisma.platformEventOutbox.count({ where: { status: 'PENDING' } }),
       this.prisma.platformEventOutbox.count({ where: { status: 'FAILED' } }),
       this.prisma.platformIncident.count({
         where: { status: { in: [IncidentStatus.OPEN, IncidentStatus.INVESTIGATING] } },
       }),
+      this.prisma.wsPage.count({ where: { isDeleted: false } }),
+      this.prisma.wsPageRevision.count(),
     ]);
 
     const mem = process.memoryUsage();
@@ -81,13 +83,14 @@ export class SuperAdminService {
     return {
       status,
       timestamp: new Date().toISOString(),
-      version: '1.6.0',
+      version: '2.1.0',
       uptimeSeconds: Math.floor(process.uptime()),
       environment: process.env.NODE_ENV || 'development',
       services: {
         database: { status: dbStatus, latencyMs: dbLatencyMs },
         redis: { status: 'up' as const, latencyMs: 1 },
         outbox: { pendingEvents: pendingOutbox, failedEvents: failedOutbox },
+        documents: { activePages: totalPages, totalRevisions },
       },
       metrics: {
         heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024),

@@ -295,6 +295,12 @@ model IdentityUser {
   securityEvents        IdentitySecurityEvent[]
   auditLogs             AuditLog[]
   adminRoles            PlatformAdminRole[]
+  createdPages          WsPage[]                 @relation("PageCreatedBy")
+  pageRevisions         WsPageRevision[]         @relation("RevisionCreatedBy")
+  pagePermissions       WsPagePermission[]       @relation("PagePermissionUser")
+  pageComments          WsPageComment[]          @relation("CommentAuthor")
+  collabEvents          WsPageCollabEvent[]      @relation("CollabEventUser")
+  pageFavorites         WsPageFavorite[]         @relation("PageFavoriteUser")
 
   @@index([email])
   @@map("identity_users")
@@ -390,6 +396,15 @@ model Organization {
   oauthStates            OAuthState[]
   developerApiKeys       DeveloperApiKey[]
   webhookSubscriptions   WebhookSubscription[]
+  workspaces             WsWorkspace[]
+  workspacePages         WsPage[]
+  workspaceBlocks        WsPageBlock[]
+  workspaceRevisions     WsPageRevision[]
+  workspacePermissions   WsPagePermission[]
+  workspaceComments      WsPageComment[]
+  workspaceCollabSnapshots WsPageCollabSnapshot[]
+  workspaceCollabEvents  WsPageCollabEvent[]
+  workspaceFavorites     WsPageFavorite[]
 
   @@index([slug])
   @@map("organizations")
@@ -635,6 +650,7 @@ model OrgRole {
   permissions    OrgRolePermission[]
   memberRoles    OrgMemberRole[]
   fieldPolicies  OrgFieldPolicy[]
+  pagePermissions WsPagePermission[]  @relation("PagePermissionRole")
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -693,6 +709,7 @@ model OrgTeam {
   childTeams     OrgTeam[]           @relation("TeamHierarchy")
   leadMember     OrganizationMember? @relation(fields: [leadMemberId], references: [id], onDelete: SetNull)
   members        OrgTeamMember[]
+  pagePermissions WsPagePermission[]  @relation("PagePermissionTeam")
 
   @@unique([organizationId, code])
   @@index([organizationId])
@@ -1496,4 +1513,279 @@ model FeatureRollout {
   updatedAt             DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("feature_rollouts")
+}
+
+// ==========================================
+// PHASE 2.1: WORKSPACE, DOCUMENTS & COLLAB
+// ==========================================
+
+enum PageAccessLevel {
+  OWNER
+  EDITOR
+  COMMENTER
+  VIEWER
+}
+
+enum PageType {
+  DOCUMENT
+  CANVAS
+  DATABASE_VIEW
+  TEMPLATE
+}
+
+enum BlockType {
+  HEADING_1
+  HEADING_2
+  HEADING_3
+  PARAGRAPH
+  BULLET_LIST
+  NUMBERED_LIST
+  CHECK_LIST
+  QUOTE
+  CODE
+  TABLE
+  CALLOUT
+  TOGGLE
+  DIVIDER
+  IMAGE
+  EMBED
+}
+
+enum CollabSnapshotType {
+  AUTOSAVE
+  CHECKPOINT
+  MANUAL
+  CRDT_STATE
+}
+
+// 60. ws_workspaces (Tenant-isolated Workspace roots)
+model WsWorkspace {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  name           String    @db.VarChar(255)
+  slug           String    @db.VarChar(100)
+  description    String?   @db.Text
+  icon           String?   @db.VarChar(100)
+  isDefault      Boolean   @default(false) @map("is_default")
+  settings       Json      @default("{}")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pages        WsPage[]
+  favorites    WsPageFavorite[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, isDefault])
+  @@map("ws_workspaces")
+}
+
+// 61. ws_pages (Hierarchical workspace documents & templates)
+model WsPage {
+  id               String    @id @default(uuid()) @db.Uuid
+  organizationId   String    @map("organization_id") @db.Uuid
+  workspaceId      String    @map("workspace_id") @db.Uuid
+  parentId         String?   @map("parent_id") @db.Uuid
+  title            String    @default("Untitled") @db.VarChar(255)
+  icon             String?   @db.VarChar(100)
+  coverUrl         String?   @map("cover_url") @db.VarChar(500)
+  type             PageType  @default(DOCUMENT)
+  isPublished      Boolean   @default(false) @map("is_published")
+  publishedSlug    String?   @unique @map("published_slug") @db.VarChar(150)
+  isTemplate       Boolean   @default(false) @map("is_template")
+  templateCategory String?   @map("template_category") @db.VarChar(100)
+  isArchived       Boolean   @default(false) @map("is_archived")
+  isDeleted        Boolean   @default(false) @map("is_deleted")
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz(6)
+  deletedById      String?   @map("deleted_by_id") @db.Uuid
+  orderIndex       Int       @default(0) @map("order_index")
+  depth            Int       @default(0)
+  createdById      String    @map("created_by_id") @db.Uuid
+  updatedById      String?   @map("updated_by_id") @db.Uuid
+  currentVersion   Int       @default(1) @map("current_version")
+  contentJson      Json?     @map("content_json")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace      WsWorkspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parent         WsPage?                @relation("PageHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children       WsPage[]               @relation("PageHierarchy")
+  createdBy      IdentityUser           @relation("PageCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  blocks         WsPageBlock[]
+  revisions      WsPageRevision[]
+  permissions    WsPagePermission[]
+  comments       WsPageComment[]
+  collabSnapshots WsPageCollabSnapshot[]
+  collabEvents   WsPageCollabEvent[]
+  favorites      WsPageFavorite[]
+
+  @@index([organizationId, workspaceId, parentId, isDeleted])
+  @@index([organizationId, isTemplate])
+  @@index([organizationId, isDeleted])
+  @@map("ws_pages")
+}
+
+// 62. ws_page_blocks (Modular content blocks in pages)
+model WsPageBlock {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  pageId         String    @map("page_id") @db.Uuid
+  parentBlockId  String?   @map("parent_block_id") @db.Uuid
+  blockType      BlockType @default(PARAGRAPH) @map("block_type")
+  orderIndex     Int       @default(0) @map("order_index")
+  content        Json      @default("{}")
+  properties     Json      @default("{}")
+  createdById    String    @map("created_by_id") @db.Uuid
+  updatedById    String?   @map("updated_by_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  page         WsPage        @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  parentBlock  WsPageBlock?  @relation("BlockHierarchy", fields: [parentBlockId], references: [id], onDelete: Cascade)
+  childBlocks  WsPageBlock[] @relation("BlockHierarchy")
+
+  @@index([pageId, orderIndex])
+  @@index([organizationId, pageId])
+  @@map("ws_page_blocks")
+}
+
+// 63. ws_page_revisions (Immutable checkpoints and named versions)
+model WsPageRevision {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  pageId         String   @map("page_id") @db.Uuid
+  version        Int
+  title          String   @db.VarChar(255)
+  contentJson    Json     @map("content_json")
+  description    String?  @db.VarChar(255)
+  isNamed        Boolean  @default(false) @map("is_named")
+  createdById    String   @map("created_by_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  page         WsPage       @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  createdBy    IdentityUser @relation("RevisionCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([pageId, version])
+  @@index([organizationId, pageId, createdAt])
+  @@map("ws_page_revisions")
+}
+
+// 64. ws_page_permissions (Fine-grained page ACLs by user, role, or team)
+model WsPagePermission {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @map("organization_id") @db.Uuid
+  pageId         String          @map("page_id") @db.Uuid
+  userId         String?         @map("user_id") @db.Uuid
+  roleId         String?         @map("role_id") @db.Uuid
+  teamId         String?         @map("team_id") @db.Uuid
+  accessLevel    PageAccessLevel @default(VIEWER) @map("access_level")
+  isInherited    Boolean         @default(false) @map("is_inherited")
+  grantedById    String          @map("granted_by_id") @db.Uuid
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  page         WsPage        @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  user         IdentityUser? @relation("PagePermissionUser", fields: [userId], references: [id], onDelete: Cascade)
+  role         OrgRole?      @relation("PagePermissionRole", fields: [roleId], references: [id], onDelete: Cascade)
+  team         OrgTeam?      @relation("PagePermissionTeam", fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([pageId, userId])
+  @@index([pageId, roleId])
+  @@index([pageId, teamId])
+  @@index([organizationId, pageId])
+  @@map("ws_page_permissions")
+}
+
+// 65. ws_page_comments (Inline comments, block threads, and mentions)
+model WsPageComment {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  pageId          String    @map("page_id") @db.Uuid
+  parentCommentId String?   @map("parent_comment_id") @db.Uuid
+  blockId         String?   @map("block_id") @db.Uuid
+  highlightText   String?   @map("highlight_text") @db.Text
+  content         String    @db.Text
+  authorId        String    @map("author_id") @db.Uuid
+  isResolved      Boolean   @default(false) @map("is_resolved")
+  resolvedById    String?   @map("resolved_by_id") @db.Uuid
+  resolvedAt      DateTime? @map("resolved_at") @db.Timestamptz(6)
+  mentions        String[]  @default([])
+  attachments     Json      @default("[]")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  page          WsPage          @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  parentComment WsPageComment?  @relation("CommentThreads", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  childComments WsPageComment[] @relation("CommentThreads")
+  author        IdentityUser    @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([pageId, parentCommentId, isResolved])
+  @@index([organizationId, pageId])
+  @@map("ws_page_comments")
+}
+
+// 66. ws_page_collab_snapshots (Durable CRDT snapshots & autosaves)
+model WsPageCollabSnapshot {
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @map("organization_id") @db.Uuid
+  pageId         String             @map("page_id") @db.Uuid
+  snapshotType   CollabSnapshotType @default(AUTOSAVE) @map("snapshot_type")
+  stateVector    Bytes?             @map("state_vector")
+  crdtData       Bytes?             @map("crdt_data")
+  version        Int                @default(1)
+  clientCount    Int                @default(1) @map("client_count")
+  metadata       Json               @default("{}")
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  page         WsPage       @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@index([pageId, createdAt])
+  @@index([organizationId, pageId])
+  @@map("ws_page_collab_snapshots")
+}
+
+// 67. ws_page_collab_events (Presence, cursor moves, and active room telemetry)
+model WsPageCollabEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  pageId         String   @map("page_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  eventType      String   @map("event_type") @db.VarChar(50)
+  cursorPosition Json?    @map("cursor_position")
+  payload        Json     @default("{}")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  page         WsPage       @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  user         IdentityUser @relation("CollabEventUser", fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([pageId, createdAt])
+  @@index([organizationId, pageId])
+  @@map("ws_page_collab_events")
+}
+
+// 68. ws_page_favorites (User pinned & favorite pages)
+model WsPageFavorite {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  workspaceId    String   @map("workspace_id") @db.Uuid
+  pageId         String   @map("page_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  orderIndex     Int      @default(0) @map("order_index")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace    WsWorkspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  page         WsPage       @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  user         IdentityUser @relation("PageFavoriteUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, pageId])
+  @@index([organizationId, userId])
+  @@map("ws_page_favorites")
 }

@@ -131,6 +131,14 @@ export default function BusinessOSDashboard() {
               <span>◈</span>
             </button>
 
+            <Link
+              href="/workspace"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-md text-[#625F59] hover:bg-[#E8E6DC] hover:text-[#141413]"
+            >
+              <span>Documents &amp; Workspace</span>
+              <span className="text-[10px] bg-[#C15F3C]/10 text-[#C15F3C] font-bold px-1.5 rounded">Docs</span>
+            </Link>
+
             <button
               onClick={() => setActiveTab('launcher')}
               className={`w-full flex items-center justify-between px-3 py-2 rounded-md transition-colors ${
