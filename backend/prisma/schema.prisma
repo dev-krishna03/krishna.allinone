@@ -213,6 +213,69 @@ enum DunningStatus {
   FAILED
 }
 
+enum PlatformAdminRoleType {
+  PLATFORM_ADMIN
+  OPERATOR
+  SUPPORT_TIER_2
+  SECURITY_OFFICER
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  INVESTIGATING
+  MITIGATED
+  RESOLVED
+}
+
+enum ConnectorAuthType {
+  OAUTH2
+  API_KEY
+  WEBHOOK
+  CUSTOM
+}
+
+enum ConnectorInstallationStatus {
+  PENDING
+  CONNECTED
+  EXPIRED
+  REVOKED
+  FAILED
+}
+
+enum WebhookSubscriptionStatus {
+  ACTIVE
+  SUSPENDED
+  FAILING
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  DELIVERED
+  FAILED
+  RETRYING
+}
+
+enum MarketplaceReviewStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  PUBLISHED
+}
+
+enum MarketplacePricingType {
+  FREE
+  INCLUDED
+  PAID_ADDON
+}
+
 // 1. identity_users (Canonical user identity without Supabase Auth)
 model IdentityUser {
   id              String         @id @default(uuid()) @db.Uuid
@@ -231,6 +294,7 @@ model IdentityUser {
   passwordResetTokens   PasswordResetToken[]
   securityEvents        IdentitySecurityEvent[]
   auditLogs             AuditLog[]
+  adminRoles            PlatformAdminRole[]
 
   @@index([email])
   @@map("identity_users")
@@ -322,6 +386,10 @@ model Organization {
   saasPayments          SaaSPayment[]
   saasCheckoutSessions  SaaSCheckoutSession[]
   saasCreditAdjustments SaaSCreditAdjustment[]
+  connectorInstallations ConnectorInstallation[]
+  oauthStates            OAuthState[]
+  developerApiKeys       DeveloperApiKey[]
+  webhookSubscriptions   WebhookSubscription[]
 
   @@index([slug])
   @@map("organizations")
@@ -1192,4 +1260,240 @@ model SaaSDunningRun {
 
   @@index([subscriptionId, status])
   @@map("saas_dunning_runs")
+}
+
+// 49. platform_admin_roles (Privileged operator RBAC)
+model PlatformAdminRole {
+  id          String                @id @default(uuid()) @db.Uuid
+  userId      String                @map("user_id") @db.Uuid
+  role        PlatformAdminRoleType @default(OPERATOR)
+  permissions String[]
+  assignedAt  DateTime              @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  assignedBy  String?               @map("assigned_by") @db.Uuid
+
+  user IdentityUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@map("platform_admin_roles")
+}
+
+// 50. platform_incidents (System health incidents and operator audit)
+model PlatformIncident {
+  id                          String           @id @default(uuid()) @db.Uuid
+  incidentNumber              String           @unique @map("incident_number") @db.VarChar(50)
+  title                       String           @db.VarChar(255)
+  description                 String           @db.Text
+  severity                    IncidentSeverity @default(MEDIUM)
+  status                      IncidentStatus   @default(OPEN)
+  affectedServices            String[]         @map("affected_services")
+  impactedOrganizationsCount  Int              @default(0) @map("impacted_organizations_count")
+  declaredByUserId            String?          @map("declared_by_user_id") @db.Uuid
+  resolvedAt                  DateTime?        @map("resolved_at") @db.Timestamptz(6)
+  timeline                    Json             @default("[]")
+  createdAt                   DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([status, severity])
+  @@map("platform_incidents")
+}
+
+// 51. connector_providers (Third-party OAuth & API registry)
+model ConnectorProvider {
+  id                  String            @id @default(uuid()) @db.Uuid
+  slug                String            @unique @db.VarChar(100)
+  name                String            @db.VarChar(255)
+  category            String            @db.VarChar(100)
+  description         String?           @db.Text
+  iconUrl             String?           @map("icon_url") @db.VarChar(500)
+  authType            ConnectorAuthType @default(OAUTH2) @map("auth_type")
+  clientId            String?           @map("client_id") @db.VarChar(255)
+  clientSecretCipher  String?           @map("client_secret_cipher") @db.Text
+  authUrl             String?           @map("auth_url") @db.VarChar(500)
+  tokenUrl            String?           @map("token_url") @db.VarChar(500)
+  scopesSupported     String[]          @map("scopes_supported")
+  isEnabled           Boolean           @default(true) @map("is_enabled")
+  isVerified          Boolean           @default(true) @map("is_verified")
+  createdAt           DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  installations ConnectorInstallation[]
+  oauthStates   OAuthState[]
+
+  @@map("connector_providers")
+}
+
+// 52. connector_installations (Tenant connector installations & lifecycle)
+model ConnectorInstallation {
+  id                    String                      @id @default(uuid()) @db.Uuid
+  organizationId        String                      @map("organization_id") @db.Uuid
+  providerId            String                      @map("provider_id") @db.Uuid
+  status                ConnectorInstallationStatus @default(PENDING)
+  installedByUserId     String?                     @map("installed_by_user_id") @db.Uuid
+  scopesGranted         String[]                    @map("scopes_granted")
+  settings              Json                        @default("{}")
+  externalAccountId     String?                     @map("external_account_id") @db.VarChar(255)
+  externalAccountEmail   String?                     @map("external_account_email") @db.VarChar(255)
+  lastSyncAt            DateTime?                   @map("last_sync_at") @db.Timestamptz(6)
+  errorMessage          String?                     @map("error_message") @db.Text
+  createdAt             DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime                    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  provider     ConnectorProvider    @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  credentials  ConnectorCredential?
+
+  @@unique([organizationId, providerId])
+  @@index([organizationId, status])
+  @@map("connector_installations")
+}
+
+// 53. connector_credentials (AES-256-GCM encrypted vault for access & refresh tokens)
+model ConnectorCredential {
+  id                    String    @id @default(uuid()) @db.Uuid
+  installationId        String    @unique @map("installation_id") @db.Uuid
+  encryptedAccessToken  String    @map("encrypted_access_token") @db.Text
+  encryptedRefreshToken String?   @map("encrypted_refresh_token") @db.Text
+  encryptionIv          String    @map("encryption_iv") @db.VarChar(64)
+  encryptionTag         String    @map("encryption_tag") @db.VarChar(64)
+  tokenType             String    @default("Bearer") @map("token_type") @db.VarChar(50)
+  expiresAt             DateTime? @map("expires_at") @db.Timestamptz(6)
+  lastRefreshedAt       DateTime? @map("last_refreshed_at") @db.Timestamptz(6)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  installation ConnectorInstallation @relation(fields: [installationId], references: [id], onDelete: Cascade)
+
+  @@map("connector_credentials")
+}
+
+// 54. oauth_states (Ephemeral CSRF/PKCE state tokens)
+model OAuthState {
+  id             String    @id @default(uuid()) @db.Uuid
+  stateToken     String    @unique @map("state_token") @db.VarChar(128)
+  organizationId String    @map("organization_id") @db.Uuid
+  providerId     String    @map("provider_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  codeVerifier   String?   @map("code_verifier") @db.VarChar(255)
+  redirectUri    String?   @map("redirect_uri") @db.VarChar(500)
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt         DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  provider     ConnectorProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([stateToken, expiresAt])
+  @@map("oauth_states")
+}
+
+// 55. developer_api_keys (Organization programmatic API credentials with quota)
+model DeveloperApiKey {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  name            String    @db.VarChar(150)
+  keyPrefix       String    @map("key_prefix") @db.VarChar(32)
+  keyHash         String    @unique @map("key_hash") @db.VarChar(128)
+  scopes          String[]
+  rateLimitPerMin Int       @default(60) @map("rate_limit_per_min")
+  monthlyQuota    Int       @default(100000) @map("monthly_quota")
+  usageCount      Int       @default(0) @map("usage_count")
+  lastUsedAt      DateTime? @map("last_used_at") @db.Timestamptz(6)
+  expiresAt       DateTime? @map("expires_at") @db.Timestamptz(6)
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdByUserId String?   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("developer_api_keys")
+}
+
+// 56. webhook_subscriptions (Outbound webhook subscriptions per tenant)
+model WebhookSubscription {
+  id                String                    @id @default(uuid()) @db.Uuid
+  organizationId    String                    @map("organization_id") @db.Uuid
+  targetUrl         String                    @map("target_url") @db.VarChar(500)
+  secretKey         String                    @map("secret_key") @db.VarChar(255)
+  subscribedEvents  String[]                  @map("subscribed_events")
+  status            WebhookSubscriptionStatus @default(ACTIVE)
+  failureCount      Int                       @default(0) @map("failure_count")
+  failureThreshold  Int                       @default(5) @map("failure_threshold")
+  lastDeliveredAt   DateTime?                 @map("last_delivered_at") @db.Timestamptz(6)
+  createdAt         DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries   WebhookDelivery[]
+
+  @@index([organizationId, status])
+  @@map("webhook_subscriptions")
+}
+
+// 57. webhook_deliveries (Outbound delivery logs, status, and retries)
+model WebhookDelivery {
+  id                  String                @id @default(uuid()) @db.Uuid
+  subscriptionId      String                @map("subscription_id") @db.Uuid
+  eventId             String                @map("event_id") @db.VarChar(100)
+  eventType           String                @map("event_type") @db.VarChar(100)
+  payload             Json
+  responseStatusCode  Int?                  @map("response_status_code")
+  responseBody        String?               @map("response_body") @db.Text
+  executionDurationMs Int?                  @map("execution_duration_ms")
+  attemptNumber       Int                   @default(1) @map("attempt_number")
+  status              WebhookDeliveryStatus @default(PENDING)
+  errorMessage        String?               @map("error_message") @db.Text
+  nextRetryAt         DateTime?             @map("next_retry_at") @db.Timestamptz(6)
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  subscription WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, status])
+  @@map("webhook_deliveries")
+}
+
+// 58. marketplace_listings (Dynamic App & Integration marketplace catalog)
+model MarketplaceListing {
+  id               String                   @id @default(uuid()) @db.Uuid
+  slug             String                   @unique @db.VarChar(100)
+  name             String                   @db.VarChar(255)
+  category         String                   @db.VarChar(100)
+  shortDescription String                   @map("short_description") @db.VarChar(500)
+  longDescription  String?                  @map("long_description") @db.Text
+  iconUrl          String?                  @map("icon_url") @db.VarChar(500)
+  developerName    String                   @map("developer_name") @db.VarChar(255)
+  version          String                   @default("1.0.0") @db.VarChar(50)
+  pricingType      MarketplacePricingType   @default(FREE) @map("pricing_type")
+  priceAmount      Decimal                  @default(0) @map("price_amount") @db.Decimal(12, 2)
+  requiredScopes   String[]                 @map("required_scopes")
+  capabilities     String[]
+  installCount     Int                      @default(0) @map("install_count")
+  reviewStatus     MarketplaceReviewStatus  @default(PUBLISHED) @map("review_status")
+  isFeatured       Boolean                  @default(false) @map("is_featured")
+  publishedAt      DateTime?                @map("published_at") @db.Timestamptz(6)
+  createdAt        DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([category, reviewStatus])
+  @@map("marketplace_listings")
+}
+
+// 59. feature_rollouts (Platform & tenant feature flags with targeting)
+model FeatureRollout {
+  id                    String        @id @default(uuid()) @db.Uuid
+  flagKey               String        @unique @map("flag_key") @db.VarChar(100)
+  name                  String        @db.VarChar(255)
+  description           String?       @db.Text
+  isEnabled             Boolean       @default(false) @map("is_enabled")
+  rolloutPercentage     Int           @default(0) @map("rollout_percentage")
+  targetEditions        PlanEdition[] @map("target_editions")
+  targetOrganizationIds String[]      @map("target_organization_ids")
+  targetUserIds         String[]      @map("target_user_ids")
+  metadata              Json          @default("{}")
+  updatedBy             String?       @map("updated_by") @db.VarChar(255)
+  createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("feature_rollouts")
 }

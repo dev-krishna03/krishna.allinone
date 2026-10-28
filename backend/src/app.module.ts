@@ -16,6 +16,9 @@ import { SecurityModule } from './platform/security/security.module';
 import { RolesTeamsModule } from './modules/roles-teams/roles-teams.module';
 import { CatalogCommercialModule } from './modules/catalog-commercial/catalog-commercial.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { IntegrationsModule } from './modules/integrations/integrations.module';
+import { MarketplaceModule } from './modules/marketplace/marketplace.module';
+import { WebhooksGovernanceModule } from './modules/webhooks/webhooks-governance.module';
 
 @Module({
   imports: [
@@ -39,6 +42,9 @@ import { BillingModule } from './modules/billing/billing.module';
     RolesTeamsModule,
     CatalogCommercialModule,
     BillingModule,
+    IntegrationsModule,
+    MarketplaceModule,
+    WebhooksGovernanceModule,
   ],
 })
 export class AppModule {}

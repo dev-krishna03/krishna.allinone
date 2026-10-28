@@ -39,11 +39,28 @@ export default function MarketplacePage() {
   const [products, setProducts] = React.useState<Product[]>([]);
   const [bundles, setBundles] = React.useState<Bundle[]>([]);
   const [entitlements, setEntitlements] = React.useState<Entitlement[]>([]);
+  const [marketplaceListings, setMarketplaceListings] = React.useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = React.useState<string>('ALL');
   const [loading, setLoading] = React.useState(true);
   const [orgId, setOrgId] = React.useState<string>('');
   const [processingSlug, setProcessingSlug] = React.useState<string | null>(null);
   const [message, setMessage] = React.useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  const handleInstallListing = async (slug: string) => {
+    try {
+      setProcessingSlug(slug);
+      const res = await fetch(`http://localhost:3001/api/v1/organizations/${orgId}/marketplace/install/${slug}`, {
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error('Installation request failed');
+      setMessage({ text: `Successfully installed application '${slug}'!`, type: 'success' });
+      await fetchData();
+    } catch (err: any) {
+      setMessage({ text: err.message || 'Installation failed', type: 'error' });
+    } finally {
+      setProcessingSlug(null);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -54,15 +71,19 @@ export default function MarketplacePage() {
       const currentOrgId = meData.organization.id;
       setOrgId(currentOrgId);
 
-      const [prodRes, bundleRes, entRes] = await Promise.all([
+      const [prodRes, bundleRes, entRes, listRes] = await Promise.all([
         fetch('http://localhost:3001/api/v1/platform/products'),
         fetch('http://localhost:3001/api/v1/platform/bundles'),
         fetch(`http://localhost:3001/api/v1/organizations/${currentOrgId}/entitlements`),
+        fetch('http://localhost:3001/api/v1/marketplace/listings', {
+          headers: { 'x-organization-id': currentOrgId },
+        }),
       ]);
 
       if (prodRes.ok) setProducts(await prodRes.json());
       if (bundleRes.ok) setBundles(await bundleRes.json());
       if (entRes.ok) setEntitlements(await entRes.json());
+      if (listRes.ok) setMarketplaceListings(await listRes.json());
     } catch (err: any) {
       setMessage({ text: err.message || 'Error loading marketplace catalog', type: 'error' });
     } finally {
@@ -308,6 +329,77 @@ export default function MarketplacePage() {
             );
           })}
         </div>
+
+        {/* App Marketplace & Connectors Directory */}
+        {marketplaceListings.length > 0 && (
+          <div className="pt-8 border-t border-[#E8E6DC] space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-[#141413]">Integration Marketplace & Connected Add-ons</h2>
+                <p className="text-xs text-[#625F59] mt-0.5">
+                  Vetted third-party connectors and extensions published for Business OS organizations.
+                </p>
+              </div>
+              <span className="text-xs font-mono font-bold bg-white px-2.5 py-1 rounded border border-[#E8E6DC]">
+                {marketplaceListings.length} Available Listings
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {marketplaceListings.map((app) => (
+                <div
+                  key={app.id}
+                  className="rounded-xl border border-[#E8E6DC] bg-white p-5 flex flex-col justify-between shadow-xs hover:border-[#D97757] transition"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      {app.iconUrl ? (
+                        <img src={app.iconUrl} alt="" className="h-8 w-8 rounded-lg p-1 bg-[#FAF9F5] border border-[#E8E6DC]" />
+                      ) : (
+                        <div className="h-8 w-8 rounded-lg bg-[#FAF9F5] border border-[#E8E6DC] flex items-center justify-center font-bold text-xs text-[#C15F3C]">
+                          APP
+                        </div>
+                      )}
+                      <span className="text-[10px] font-mono uppercase bg-[#FAF9F5] border border-[#E8E6DC] px-2 py-0.5 rounded text-[#625F59]">
+                        {app.pricingType}
+                      </span>
+                    </div>
+
+                    <div>
+                      <h3 className="font-bold text-sm text-[#141413]">{app.name}</h3>
+                      <p className="text-xs text-[#625F59] mt-1 line-clamp-2">{app.shortDescription}</p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1">
+                      {(app.capabilities || []).slice(0, 3).map((cap: string) => (
+                        <span key={cap} className="text-[10px] bg-[#FAF9F5] border border-[#E8E6DC] text-[#625F59] px-1.5 py-0.5 rounded">
+                          {cap}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-[#E8E6DC] flex items-center justify-between">
+                    <span className="text-[11px] text-[#8A867D]">
+                      {app.installCount} installs • v{app.version}
+                    </span>
+                    <button
+                      onClick={() => handleInstallListing(app.slug)}
+                      disabled={app.isInstalled || processingSlug === app.slug}
+                      className={`px-3 py-1.5 rounded-md text-xs font-semibold transition ${
+                        app.isInstalled
+                          ? 'bg-[#FAF9F5] text-[#476B3C] border border-[#E8E6DC] cursor-default'
+                          : 'bg-[#141413] text-white hover:bg-black'
+                      }`}
+                    >
+                      {processingSlug === app.slug ? 'Installing...' : app.isInstalled ? '✓ Installed' : 'Install App'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
